@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Archive, ChevronRight, CircleAlert } from "lucide-react";
 import type { ConfigurationView } from "../types";
 import { api, errorMessage } from "../services/api";
 
@@ -39,6 +40,7 @@ export default function ConfigRow({ view, onArchived }: ConfigRowProps) {
       onArchived?.();
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
       setBusy(false);
     }
   }
@@ -55,16 +57,20 @@ export default function ConfigRow({ view, onArchived }: ConfigRowProps) {
         </div>
         <div className={`config-row-status status-text-${view.status}`}>{statusText(view)}</div>
       </button>
-      {error && <span className="config-row-error" title={error}>⚠</span>}
+      {error && (
+        <span className="config-row-error" title={error}>
+          <CircleAlert size={15} strokeWidth={2} />
+        </span>
+      )}
       <button className="icon-btn" title="Archive" disabled={busy} onClick={handleArchive}>
-        {"\u{1F5C4}\u{FE0F}"}
+        <Archive size={16} strokeWidth={1.75} />
       </button>
       <button
         className="config-row-chevron-btn"
         aria-label="Open"
         onClick={() => navigate(`/configurations/${configuration.id}`)}
       >
-        <span className="config-row-chevron">›</span>
+        <ChevronRight className="config-row-chevron" size={18} strokeWidth={1.75} />
       </button>
     </div>
   );

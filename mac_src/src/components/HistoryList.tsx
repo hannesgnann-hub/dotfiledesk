@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Archive, ArchiveRestore, Pencil, RotateCcw, Star, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../services/api";
 import type { Snapshot } from "../types";
 import { formatDateTime, shortCommit } from "../services/format";
@@ -107,7 +108,7 @@ export default function HistoryList({ configurationId, onRestored }: HistoryList
                 disabled={busyId === snap.id}
                 onClick={() => toggleFavorite(snap)}
               >
-                {snap.favorite ? "★" : "☆"}
+                <Star size={16} strokeWidth={1.75} fill={snap.favorite ? "currentColor" : "none"} />
               </button>
 
               <button
@@ -126,7 +127,7 @@ export default function HistoryList({ configurationId, onRestored }: HistoryList
                   title="Edit current file"
                   onClick={() => navigate(`/configurations/${configurationId}/edit`)}
                 >
-                  ✎
+                  <Pencil size={15} strokeWidth={1.75} />
                 </button>
                 <button
                   className="icon-btn"
@@ -134,7 +135,7 @@ export default function HistoryList({ configurationId, onRestored }: HistoryList
                   disabled={busyId === snap.id}
                   onClick={() => setPending({ kind: "restore", snapshot: snap })}
                 >
-                  ↺
+                  <RotateCcw size={15} strokeWidth={1.75} />
                 </button>
                 <button
                   className="icon-btn"
@@ -142,7 +143,11 @@ export default function HistoryList({ configurationId, onRestored }: HistoryList
                   disabled={busyId === snap.id}
                   onClick={() => toggleArchived(snap)}
                 >
-                  {snap.archived ? "\u{1F4E4}" : "\u{1F5C4}\u{FE0F}"}
+                  {snap.archived ? (
+                    <ArchiveRestore size={15} strokeWidth={1.75} />
+                  ) : (
+                    <Archive size={15} strokeWidth={1.75} />
+                  )}
                 </button>
                 <button
                   className="icon-btn icon-btn-danger"
@@ -150,7 +155,7 @@ export default function HistoryList({ configurationId, onRestored }: HistoryList
                   disabled={busyId === snap.id}
                   onClick={() => setPending({ kind: "delete", snapshot: snap })}
                 >
-                  🗑
+                  <Trash2 size={15} strokeWidth={1.75} />
                 </button>
               </div>
             </div>

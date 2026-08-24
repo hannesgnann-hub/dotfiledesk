@@ -124,6 +124,7 @@ export default function DashboardPage() {
             key={category}
             title={CATEGORY_LABELS[category]}
             items={views.filter((v) => v.configuration.category === category)}
+            onArchived={load}
           />
         ))}
       </div>
