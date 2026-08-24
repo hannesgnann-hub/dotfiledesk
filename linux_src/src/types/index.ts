@@ -64,6 +64,7 @@ export interface Configuration {
   sensitivity: Sensitivity;
   added_at: string;
   last_snapshot_at: string | null;
+  archived: boolean;
 }
 
 export interface ConfigurationView {
@@ -83,6 +84,8 @@ export interface Snapshot {
   created_at: string;
   git_commit: string;
   reason: string;
+  favorite: boolean;
+  archived: boolean;
 }
 
 export type FileChangeKind = "added" | "modified" | "deleted";
@@ -132,4 +135,22 @@ export interface FileContent {
   relative_path: string | null;
   content: string;
   is_binary: boolean;
+}
+
+export interface CatalogSuggestion {
+  definition_id: string;
+  application: string;
+  category: Category;
+  kind: ConfigKind;
+  path: string;
+  sensitivity: Sensitivity;
+}
+
+export interface DashboardSummary {
+  configuration_count: number;
+  file_count: number;
+  total_size_bytes: number;
+  modified_count: number;
+  missing_count: number;
+  snapshot_count: number;
 }

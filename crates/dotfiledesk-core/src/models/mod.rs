@@ -113,6 +113,9 @@ pub struct Configuration {
     pub sensitivity: Sensitivity,
     pub added_at: String,
     pub last_snapshot_at: Option<String>,
+    /// Archived configurations are hidden from the main dashboard but keep
+    /// their full history and can be unarchived at any time.
+    pub archived: bool,
 }
 
 /// One point-in-time snapshot of a [`Configuration`], backed by a git commit in
@@ -124,4 +127,8 @@ pub struct Snapshot {
     pub created_at: String,
     pub git_commit: String,
     pub reason: String,
+    /// User-starred snapshots, surfaced first in the history list.
+    pub favorite: bool,
+    /// Archived snapshots are hidden from the history list by default.
+    pub archived: bool,
 }

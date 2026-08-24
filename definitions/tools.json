@@ -99,6 +99,33 @@
     "sensitivity": "potential_secret"
   },
   {
+    "id": "docker_daemon",
+    "application": "Docker Daemon",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.docker/daemon.json"],
+    "platforms": ["macos", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "direnv",
+    "application": "direnv",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.config/direnv/direnvrc", "~/.direnvrc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "asdf",
+    "application": "asdf",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.asdfrc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
     "id": "bat",
     "application": "bat",
     "category": "developer_tools",

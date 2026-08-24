@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dotfiledesk-vite",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd mac_src && npm run dev"],
+      "port": 1420
+    }
+  ]
+}

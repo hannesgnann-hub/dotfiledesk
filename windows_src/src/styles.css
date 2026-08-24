@@ -110,6 +110,44 @@ select {
   margin: 0;
 }
 
+.dashboard-wide {
+  max-width: 960px;
+}
+
+.dashboard-brand {
+  font-size: 36px;
+}
+
+.dashboard-list-heading {
+  margin: 8px 0 14px;
+}
+
+.stat-card-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  padding: 14px 16px;
+}
+
+.stat-card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.stat-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
 .back-link {
   background: none;
   border: none;
@@ -302,6 +340,20 @@ select {
 .config-row-chevron {
   color: var(--text-tertiary);
   font-size: 18px;
+}
+
+.config-row-archived {
+  cursor: default;
+}
+
+.config-row-link {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
 }
 
 /* Status badge (pill, used on detail page) */
@@ -611,6 +663,13 @@ select {
   margin: 0 0 12px;
 }
 
+.section-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: -6px 0 12px;
+  line-height: 1.5;
+}
+
 .section-actions {
   margin-top: 14px;
   display: flex;
@@ -667,13 +726,11 @@ select {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   background: none;
   border: none;
   border-bottom: 1px solid var(--border);
-  text-align: left;
-  cursor: pointer;
   color: var(--text);
 }
 
@@ -685,9 +742,20 @@ select {
   background: var(--bg-row-hover);
 }
 
+.history-row-archived {
+  opacity: 0.55;
+}
+
 .history-row-main {
   flex: 1;
   min-width: 0;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
 }
 
 .history-row-reason {
@@ -704,6 +772,57 @@ select {
   font-size: 11px;
   color: var(--text-tertiary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.history-row-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: var(--bg-row-hover);
+  color: var(--text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-btn-star {
+  color: var(--warning);
+  font-size: 16px;
+}
+
+.icon-btn-danger:hover {
+  color: var(--danger);
+}
+
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-archived-toggle {
+  align-self: flex-start;
 }
 
 /* Diff view */
@@ -852,6 +971,80 @@ select {
 .editor-status {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* App shell / footer / sponsor banner (structure mirrors easyalias) */
+
+.app-main {
+  padding-bottom: 56px; /* keeps content clear of the fixed support banner */
+}
+
+.app-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 40px 0 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-footer-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.support-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--warning);
+  background: var(--warning-bg);
+  color: var(--text);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.support-banner-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.support-banner-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .support-banner {
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 14px;
+  }
 }
 
 /* Modal */

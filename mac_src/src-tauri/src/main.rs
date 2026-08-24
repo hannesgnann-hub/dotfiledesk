@@ -7,7 +7,8 @@ use dotfiledesk_core::discovery::DiscoveredConfig;
 use dotfiledesk_core::history::DiffResult;
 use dotfiledesk_core::models::{Category, Configuration, Sensitivity, Snapshot};
 use dotfiledesk_core::{
-    ConfigurationDetail, ConfigurationView, Core, CoreError, FileContent, SnapshotAllResult,
+    CatalogSuggestion, ConfigurationDetail, ConfigurationView, Core, CoreError, DashboardSummary,
+    FileContent, SnapshotAllResult,
 };
 use serde::Serialize;
 use std::sync::Mutex;
@@ -28,6 +29,26 @@ fn scan_configurations(state: tauri::State<AppState>) -> Result<Vec<DiscoveredCo
 #[tauri::command]
 fn list_configurations(state: tauri::State<AppState>) -> Result<Vec<ConfigurationView>, CoreError> {
     with_core(state, |core| core.list_configurations())
+}
+
+#[tauri::command]
+fn dashboard_summary(state: tauri::State<AppState>) -> Result<DashboardSummary, CoreError> {
+    with_core(state, |core| core.dashboard_summary())
+}
+
+#[tauri::command]
+fn list_archived_configurations(state: tauri::State<AppState>) -> Result<Vec<ConfigurationView>, CoreError> {
+    with_core(state, |core| core.list_archived_configurations())
+}
+
+#[tauri::command]
+fn archive_configuration(state: tauri::State<AppState>, id: String) -> Result<(), CoreError> {
+    with_core(state, |core| core.archive_configuration(&id))
+}
+
+#[tauri::command]
+fn unarchive_configuration(state: tauri::State<AppState>, id: String) -> Result<(), CoreError> {
+    with_core(state, |core| core.unarchive_configuration(&id))
 }
 
 #[tauri::command]
@@ -124,6 +145,43 @@ fn restore_snapshot(
 }
 
 #[tauri::command]
+fn favorite_snapshot(
+    state: tauri::State<AppState>,
+    snapshot_id: String,
+    favorite: bool,
+) -> Result<(), CoreError> {
+    with_core(state, |core| core.favorite_snapshot(&snapshot_id, favorite))
+}
+
+#[tauri::command]
+fn archive_snapshot(
+    state: tauri::State<AppState>,
+    snapshot_id: String,
+    archived: bool,
+) -> Result<(), CoreError> {
+    with_core(state, |core| core.archive_snapshot(&snapshot_id, archived))
+}
+
+#[tauri::command]
+fn delete_snapshot(state: tauri::State<AppState>, snapshot_id: String) -> Result<(), CoreError> {
+    with_core(state, |core| core.delete_snapshot(&snapshot_id))
+}
+
+#[tauri::command]
+fn list_suggestions(state: tauri::State<AppState>) -> Result<Vec<CatalogSuggestion>, CoreError> {
+    with_core(state, |core| core.list_catalog_suggestions())
+}
+
+#[tauri::command]
+fn add_suggestion(
+    state: tauri::State<AppState>,
+    definition_id: String,
+    confirmed: bool,
+) -> Result<Configuration, CoreError> {
+    with_core(state, |core| core.add_suggestion(&definition_id, confirmed))
+}
+
+#[tauri::command]
 fn list_configuration_files(state: tauri::State<AppState>, id: String) -> Result<Vec<String>, CoreError> {
     with_core(state, |core| core.list_configuration_files(&id))
 }
@@ -165,6 +223,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             scan_configurations,
             list_configurations,
+            dashboard_summary,
+            list_archived_configurations,
+            archive_configuration,
+            unarchive_configuration,
             get_configuration_detail,
             add_discovered,
             preview_custom_path,
@@ -176,6 +238,11 @@ fn main() {
             diff_snapshot,
             diff_working,
             restore_snapshot,
+            favorite_snapshot,
+            archive_snapshot,
+            delete_snapshot,
+            list_suggestions,
+            add_suggestion,
             list_configuration_files,
             read_configuration_file,
             write_configuration_file,

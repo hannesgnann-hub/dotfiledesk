@@ -55,7 +55,7 @@ export default function DiffPage({ mode }: { mode: "working" | "snapshot" }) {
     }
   }
 
-  const backTo = mode === "working" ? `/configurations/${id}` : `/configurations/${id}/history`;
+  const backTo = `/configurations/${id}`;
 
   return (
     <div className="page-content">
@@ -63,7 +63,7 @@ export default function DiffPage({ mode }: { mode: "working" | "snapshot" }) {
         title={mode === "working" ? "Changes" : snapshot?.reason ?? "Snapshot"}
         subtitle={mode === "working" ? configuration?.name : formatDateTime(snapshot?.created_at ?? null)}
         backTo={backTo}
-        backLabel={mode === "working" ? configuration?.name ?? "Back" : "History"}
+        backLabel={configuration?.name ?? "Back"}
       />
 
       {error && <div className="banner banner-error">{error}</div>}

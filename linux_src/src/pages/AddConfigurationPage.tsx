@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, errorMessage } from "../services/api";
-import type { Category, ConfigurationView, DiscoveredConfig, PathPreview } from "../types";
+import type { CatalogSuggestion, Category, ConfigurationView, DiscoveredConfig, PathPreview } from "../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../types";
 import PageHeader from "../components/PageHeader";
 import DiscoveredList from "../components/DiscoveredList";
@@ -13,6 +13,9 @@ export default function AddConfigurationPage() {
   const navigate = useNavigate();
   const [discovered, setDiscovered] = useState<DiscoveredConfig[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [suggestions, setSuggestions] = useState<DiscoveredConfig[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  const [suggestionsSubmitting, setSuggestionsSubmitting] = useState(false);
   const [confirmItem, setConfirmItem] = useState<DiscoveredConfig | null>(null);
   const resolverRef = useRef<((value: boolean) => void) | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,12 +30,11 @@ export default function AddConfigurationPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [found, existing]: [DiscoveredConfig[], ConfigurationView[]] = await Promise.all([
-          api.scanConfigurations(),
-          api.listConfigurations()
-        ]);
+        const [found, existing, suggested]: [DiscoveredConfig[], ConfigurationView[], CatalogSuggestion[]] =
+          await Promise.all([api.scanConfigurations(), api.listConfigurations(), api.listSuggestions()]);
         const trackedIds = new Set(existing.map((v) => v.configuration.definition_id).filter(Boolean));
         setDiscovered(found.filter((f) => !trackedIds.has(f.definition_id)));
+        setSuggestions(suggested.map((s) => ({ ...s, is_private_key: false })));
       } catch (e) {
         setError(errorMessage(e));
       }
@@ -56,6 +58,15 @@ export default function AddConfigurationPage() {
 
   function toggle(id: string) {
     setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSuggestion(id: string) {
+    setSelectedSuggestions((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -94,6 +105,27 @@ export default function AddConfigurationPage() {
       }
     }
     setSubmitting(false);
+    navigate("/", { replace: true });
+  }
+
+  async function handleAddSuggestions() {
+    setSuggestionsSubmitting(true);
+    setError(null);
+    for (const id of selectedSuggestions) {
+      const item = suggestions.find((i) => i.definition_id === id);
+      if (!item) continue;
+      let confirmed = true;
+      if (item.sensitivity !== "normal") {
+        confirmed = await askConfirm(item);
+      }
+      if (!confirmed) continue;
+      try {
+        await api.addSuggestion(id, confirmed);
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+    }
+    setSuggestionsSubmitting(false);
     navigate("/", { replace: true });
   }
 
@@ -158,6 +190,26 @@ export default function AddConfigurationPage() {
               onClick={handleAddSelected}
             >
               {submitting ? "Adding…" : `Add Selected (${selected.size})`}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {suggestions.length > 0 && (
+        <section className="add-section">
+          <h2 className="section-heading">Suggestions</h2>
+          <p className="section-hint">
+            Common tools that aren't set up on this machine yet. Adding one creates an empty file (or
+            folder) so you can start it right away with the integrated editor.
+          </p>
+          <DiscoveredList items={suggestions} selected={selectedSuggestions} onToggle={toggleSuggestion} />
+          <div className="section-actions">
+            <button
+              className="btn btn-primary"
+              disabled={selectedSuggestions.size === 0 || suggestionsSubmitting}
+              onClick={handleAddSuggestions}
+            >
+              {suggestionsSubmitting ? "Creating…" : `Create & Track (${selectedSuggestions.size})`}
             </button>
           </div>
         </section>

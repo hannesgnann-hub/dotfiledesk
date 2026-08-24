@@ -1,12 +1,13 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, errorMessage } from "../services/api";
 import type { ConfigurationDetail } from "../types";
 import { formatBytes, formatDate } from "../services/format";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import ConfirmDialog from "../components/ConfirmDialog";
+import HistoryList from "../components/HistoryList";
 
 export default function ConfigDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +71,23 @@ export default function ConfigDetailPage() {
     }
   }
 
+  async function handleToggleArchive() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (configuration.archived) {
+        await api.unarchiveConfiguration(configuration.id);
+      } else {
+        await api.archiveConfiguration(configuration.id);
+      }
+      await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-content">
       <PageHeader title={configuration.name} backTo="/" backLabel="Configurations" />
@@ -77,23 +95,19 @@ export default function ConfigDetailPage() {
       <div className="detail-path">{configuration.path}</div>
 
       {error && <div className="banner banner-error">{error}</div>}
+      {configuration.archived && (
+        <div className="banner banner-info">This configuration is archived and hidden from the dashboard.</div>
+      )}
 
       {status === "missing" ? (
         <div className="detail-missing">
           <div className="banner banner-error">
-            This configuration is missing from disk. The last known snapshot is still available.
+            This configuration is missing from disk. Restore it from a snapshot below, or stop tracking it.
           </div>
           <div className="detail-fact-list">
             <DetailFact label="Last known snapshot" value={formatDate(configuration.last_snapshot_at)} />
           </div>
           <div className="detail-actions">
-            <button
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() => navigate(`/configurations/${configuration.id}/history`)}
-            >
-              Restore
-            </button>
             <button className="btn btn-danger" disabled={busy} onClick={() => setConfirmRemove(true)}>
               Remove from DotfileDesk
             </button>
@@ -115,9 +129,6 @@ export default function ConfigDetailPage() {
             >
               Edit
             </button>
-            <button className="btn btn-secondary" onClick={() => openPath(configuration.path)}>
-              Open
-            </button>
             <button className="btn btn-secondary" onClick={() => revealItemInDir(configuration.path)}>
               Show in File Manager
             </button>
@@ -133,20 +144,22 @@ export default function ConfigDetailPage() {
               {busy ? "Snapshotting…" : "Create Snapshot"}
             </button>
           </div>
-
-          <div className="detail-secondary-actions">
-            <button
-              className="link-button"
-              onClick={() => navigate(`/configurations/${configuration.id}/history`)}
-            >
-              View history
-            </button>
-            <button className="link-button link-button-danger" onClick={() => setConfirmRemove(true)}>
-              Remove from DotfileDesk
-            </button>
-          </div>
         </>
       )}
+
+      <div className="detail-secondary-actions">
+        <button className="link-button" disabled={busy} onClick={handleToggleArchive}>
+          {configuration.archived ? "Unarchive" : "Archive"}
+        </button>
+        <button className="link-button link-button-danger" onClick={() => setConfirmRemove(true)}>
+          Remove from DotfileDesk
+        </button>
+      </div>
+
+      <section className="add-section">
+        <h2 className="section-heading">History</h2>
+        <HistoryList configurationId={configuration.id} onRestored={load} />
+      </section>
 
       {confirmRemove && (
         <ConfirmDialog

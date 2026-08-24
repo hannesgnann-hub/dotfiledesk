@@ -10,7 +10,7 @@ pub mod models;
 pub mod security;
 pub mod tracking;
 
-use models::{Category, ConfigKind, Configuration, Sensitivity, Snapshot, Status};
+use models::{Category, ConfigKind, Configuration, Platform, Sensitivity, Snapshot, Status};
 use serde::{Serialize, Serializer};
 use std::path::{Path, PathBuf};
 
@@ -60,6 +60,21 @@ pub struct ConfigurationDetail {
     pub size_bytes: Option<u64>,
 }
 
+/// Aggregate numbers across every non-archived tracked configuration, shown
+/// as the stat-card row at the top of the dashboard.
+#[derive(Debug, Clone, Serialize)]
+pub struct DashboardSummary {
+    pub configuration_count: usize,
+    /// Files actually present on disk right now, summed across every
+    /// tracked configuration (a directory configuration counts every file
+    /// inside it, minus the usual ignore patterns).
+    pub file_count: usize,
+    pub total_size_bytes: u64,
+    pub modified_count: usize,
+    pub missing_count: usize,
+    pub snapshot_count: usize,
+}
+
 /// The content of a single file within a tracked configuration, as shown by
 /// the integrated editor. `relative_path` is `None` for a [`ConfigKind::File`]
 /// configuration and `Some` (relative to the configuration's root) for a
@@ -69,6 +84,20 @@ pub struct FileContent {
     pub relative_path: Option<String>,
     pub content: String,
     pub is_binary: bool,
+}
+
+/// A catalog entry the user hasn't tracked yet and that doesn't exist on
+/// disk, offered on the Add Configuration page as something worth creating.
+/// Unlike [`discovery::DiscoveredConfig`] (which only ever reports paths that
+/// already exist), a suggestion is "created and tracked" from scratch.
+#[derive(Debug, Clone, Serialize)]
+pub struct CatalogSuggestion {
+    pub definition_id: String,
+    pub application: String,
+    pub category: Category,
+    pub kind: ConfigKind,
+    pub path: String,
+    pub sensitivity: Sensitivity,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,25 +118,85 @@ pub struct Core {
     store: tracking::Store,
     repo: history::HistoryRepo,
     registry: discovery::Registry,
+    home: PathBuf,
 }
 
 impl Core {
     /// `app_data_dir` is a per-user, per-app directory (e.g. from
     /// `~/.local/share/dotfiledesk` or the platform's app-data location).
     pub fn init(app_data_dir: &Path) -> Result<Self, CoreError> {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        Self::init_with_home(app_data_dir, &home)
+    }
+
+    /// Same as [`Core::init`] but with an explicit home directory instead of
+    /// the process's real one — used by tests so catalog-suggestion path
+    /// expansion never touches the developer machine's actual `$HOME`.
+    pub fn init_with_home(app_data_dir: &Path, home: &Path) -> Result<Self, CoreError> {
         std::fs::create_dir_all(app_data_dir)?;
         let store = tracking::Store::open(&app_data_dir.join("dotfiledesk.sqlite"))?;
         let repo = history::HistoryRepo::open_or_init(&app_data_dir.join("repository"))?;
         let registry = discovery::Registry::load_builtin();
-        Ok(Core { store, repo, registry })
+        Ok(Core { store, repo, registry, home: home.to_path_buf() })
+    }
+
+    /// Expands a leading `~` against this `Core`'s home directory (the real
+    /// one in production, an injected one in tests).
+    fn expand(&self, raw: &str) -> PathBuf {
+        if let Some(rest) = raw.strip_prefix("~/") {
+            self.home.join(rest)
+        } else if raw == "~" {
+            self.home.clone()
+        } else {
+            PathBuf::from(raw)
+        }
     }
 
     pub fn scan(&self) -> Vec<discovery::DiscoveredConfig> {
-        discovery::scan(&self.registry)
+        discovery::scan_with_home(&self.registry, &self.home)
     }
 
     pub fn list_configurations(&self) -> Result<Vec<ConfigurationView>, CoreError> {
-        let configs = self.store.list_configurations()?;
+        let configs = self.store.list_configurations(false)?;
+        self.attach_status(configs)
+    }
+
+    /// Configurations the user archived — hidden from the dashboard but not
+    /// removed; their history is untouched.
+    pub fn list_archived_configurations(&self) -> Result<Vec<ConfigurationView>, CoreError> {
+        let configs = self.store.list_archived_configurations()?;
+        self.attach_status(configs)
+    }
+
+    /// Aggregate stats for the dashboard's overview cards, across every
+    /// non-archived tracked configuration.
+    pub fn dashboard_summary(&self) -> Result<DashboardSummary, CoreError> {
+        let configs = self.store.list_configurations(false)?;
+        let mut summary = DashboardSummary {
+            configuration_count: configs.len(),
+            file_count: 0,
+            total_size_bytes: 0,
+            modified_count: 0,
+            missing_count: 0,
+            snapshot_count: 0,
+        };
+        for configuration in &configs {
+            let path = Path::new(&configuration.path);
+            summary.file_count += path_file_count(path, configuration.kind);
+            summary.total_size_bytes += path_size(path).unwrap_or(0);
+            summary.snapshot_count += self.store.list_snapshots(&configuration.id)?.len();
+
+            let latest = self.latest_commit(&configuration.id)?;
+            match history::compute_status(&self.repo, configuration, latest.as_deref())? {
+                Status::Modified => summary.modified_count += 1,
+                Status::Missing => summary.missing_count += 1,
+                _ => {}
+            }
+        }
+        Ok(summary)
+    }
+
+    fn attach_status(&self, configs: Vec<Configuration>) -> Result<Vec<ConfigurationView>, CoreError> {
         configs
             .into_iter()
             .map(|configuration| {
@@ -116,6 +205,14 @@ impl Core {
                 Ok(ConfigurationView { configuration, status })
             })
             .collect()
+    }
+
+    pub fn archive_configuration(&self, id: &str) -> Result<(), CoreError> {
+        self.store.set_configuration_archived(id, true)
+    }
+
+    pub fn unarchive_configuration(&self, id: &str) -> Result<(), CoreError> {
+        self.store.set_configuration_archived(id, false)
     }
 
     pub fn get_configuration_detail(&self, id: &str) -> Result<Option<ConfigurationDetail>, CoreError> {
@@ -132,7 +229,7 @@ impl Core {
     /// anything other than [`Sensitivity::Normal`]; private keys are always
     /// refused regardless of confirmation.
     pub fn add_discovered(&self, definition_id: &str, confirmed: bool) -> Result<Configuration, CoreError> {
-        let discovered = discovery::scan(&self.registry)
+        let discovered = discovery::scan_with_home(&self.registry, &self.home)
             .into_iter()
             .find(|d| d.definition_id == definition_id)
             .ok_or_else(|| CoreError::NotFound(definition_id.to_string()))?;
@@ -162,7 +259,7 @@ impl Core {
         category: Category,
         confirmed: bool,
     ) -> Result<Configuration, CoreError> {
-        let expanded = expand_home(path);
+        let expanded = self.expand(path);
         if !expanded.exists() {
             return Err(CoreError::PathNotFound(path.to_string()));
         }
@@ -198,7 +295,7 @@ impl Core {
     }
 
     pub fn snapshot_all(&self) -> Result<SnapshotAllResult, CoreError> {
-        let configs = self.store.list_configurations()?;
+        let configs = self.store.list_configurations(false)?;
         let mut snapshotted = Vec::new();
         let mut unchanged_count = 0;
         for configuration in configs {
@@ -244,6 +341,124 @@ impl Core {
     pub fn restore(&self, id: &str, commit: &str) -> Result<backup::RestoreResult, CoreError> {
         let configuration = self.require_configuration(id)?;
         backup::restore(&self.repo, &self.store, &configuration, commit)
+    }
+
+    pub fn favorite_snapshot(&self, snapshot_id: &str, favorite: bool) -> Result<(), CoreError> {
+        self.store.set_snapshot_favorite(snapshot_id, favorite)
+    }
+
+    pub fn archive_snapshot(&self, snapshot_id: &str, archived: bool) -> Result<(), CoreError> {
+        self.store.set_snapshot_archived(snapshot_id, archived)
+    }
+
+    /// Permanently removes a snapshot's metadata. The underlying git commit
+    /// stays in the internal repository (an inert, invisible leftover) — only
+    /// the history entry disappears.
+    pub fn delete_snapshot(&self, snapshot_id: &str) -> Result<(), CoreError> {
+        self.store.delete_snapshot(snapshot_id)
+    }
+
+    /// Catalog definitions for the current platform that neither exist on
+    /// disk nor are tracked yet — things like Docker or a global `.gitignore`
+    /// that make sense to start from scratch. Anything that already exists
+    /// surfaces through [`Core::scan`] instead, so the two lists never
+    /// overlap. Private-key definitions are excluded outright — creating an
+    /// empty file at a private key path would be actively misleading.
+    pub fn list_catalog_suggestions(&self) -> Result<Vec<CatalogSuggestion>, CoreError> {
+        let tracked: std::collections::HashSet<String> = self
+            .store
+            .list_configurations(true)?
+            .into_iter()
+            .filter_map(|c| c.definition_id)
+            .collect();
+        let current = Platform::current();
+
+        let suggestions = self
+            .registry
+            .definitions()
+            .iter()
+            .filter(|def| def.platforms.contains(&current))
+            .filter(|def| !tracked.contains(&def.id))
+            .filter(|def| !security::is_private_key(&self.expand(def.paths.first().map(String::as_str).unwrap_or(""))))
+            .filter_map(|def| {
+                let first_path = def.paths.first()?;
+                let candidate = def
+                    .paths
+                    .iter()
+                    .map(|p| self.expand(p))
+                    .find(|p| match def.kind {
+                        ConfigKind::File => p.is_file(),
+                        ConfigKind::Directory => p.is_dir(),
+                    })
+                    .unwrap_or_else(|| self.expand(first_path));
+                if candidate.exists() {
+                    return None; // already covered by discovery
+                }
+                Some(CatalogSuggestion {
+                    definition_id: def.id.clone(),
+                    application: def.application.clone(),
+                    category: def.category,
+                    kind: def.kind,
+                    path: candidate.to_string_lossy().to_string(),
+                    sensitivity: def.sensitivity,
+                })
+            })
+            .collect();
+        Ok(suggestions)
+    }
+
+    /// Tracks a suggestion. If nothing exists at its path yet, an empty
+    /// file/directory is created first so the user can fill it in with the
+    /// integrated editor right away.
+    pub fn add_suggestion(&self, definition_id: &str, confirmed: bool) -> Result<Configuration, CoreError> {
+        let def = self
+            .registry
+            .definitions()
+            .iter()
+            .find(|d| d.id == definition_id)
+            .ok_or_else(|| CoreError::NotFound(definition_id.to_string()))?;
+
+        let first_path = def
+            .paths
+            .first()
+            .ok_or_else(|| CoreError::InvalidPath(definition_id.to_string()))?;
+        let path = def
+            .paths
+            .iter()
+            .map(|p| self.expand(p))
+            .find(|p| match def.kind {
+                ConfigKind::File => p.is_file(),
+                ConfigKind::Directory => p.is_dir(),
+            })
+            .unwrap_or_else(|| self.expand(first_path));
+
+        if security::is_private_key(&path) {
+            return Err(CoreError::PrivateKeyBlocked);
+        }
+        if def.sensitivity != Sensitivity::Normal && !confirmed {
+            return Err(CoreError::ConfirmationRequired);
+        }
+
+        if !path.exists() {
+            match def.kind {
+                ConfigKind::File => {
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&path, "")?;
+                }
+                ConfigKind::Directory => std::fs::create_dir_all(&path)?,
+            }
+        }
+
+        self.store.add_configuration(
+            Some(&def.id),
+            &def.application,
+            &path.to_string_lossy(),
+            def.category,
+            def.kind,
+            def.sensitivity,
+        )
     }
 
     /// Lists the files inside a directory configuration, relative to its
@@ -385,14 +600,42 @@ fn path_size(path: &Path) -> Option<u64> {
     None
 }
 
+/// How many files a configuration actually contributes right now — 1 for an
+/// existing plain file, 0 if it's missing, or a directory's file count minus
+/// the usual ignore patterns (`.git`, `node_modules`, …).
+fn path_file_count(path: &Path, kind: ConfigKind) -> usize {
+    match kind {
+        ConfigKind::File => usize::from(path.is_file()),
+        ConfigKind::Directory => {
+            if !path.is_dir() {
+                return 0;
+            }
+            walkdir::WalkDir::new(path)
+                .into_iter()
+                .filter_entry(|e| {
+                    e.file_name()
+                        .to_str()
+                        .map(|n| !security::is_ignored_entry(n))
+                        .unwrap_or(true)
+                })
+                .flatten()
+                .filter(|e| e.file_type().is_file())
+                .count()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    /// The returned `TempDir` doubles as both the app-data dir and the "home"
+    /// directory Core resolves `~` against, so tests that exercise catalog
+    /// suggestions never touch the real developer machine's `$HOME`.
     fn make_core() -> (Core, tempfile::TempDir) {
         let dir = tempdir().unwrap();
-        let core = Core::init(dir.path()).unwrap();
+        let core = Core::init_with_home(dir.path(), dir.path()).unwrap();
         (core, dir)
     }
 
@@ -492,6 +735,41 @@ mod tests {
     }
 
     #[test]
+    fn dashboard_summary_aggregates_across_configurations() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+
+        let file = home.path().join("solo.conf");
+        std::fs::write(&file, "hello\n").unwrap();
+        let file_config = core.add_custom("Solo", &file.to_string_lossy(), Category::Other, false).unwrap();
+
+        let dir = home.path().join("nvim");
+        std::fs::create_dir_all(dir.join("lua")).unwrap();
+        std::fs::write(dir.join("init.lua"), "-- init\n").unwrap();
+        std::fs::write(dir.join("lua/plugins.lua"), "-- plugins\n").unwrap();
+        let dir_config = core.add_custom("Neovim", &dir.to_string_lossy(), Category::Editor, false).unwrap();
+
+        let empty = core.dashboard_summary().unwrap();
+        assert_eq!(empty.configuration_count, 2);
+        assert_eq!(empty.file_count, 3); // solo.conf + init.lua + lua/plugins.lua
+        assert_eq!(empty.snapshot_count, 0);
+        assert_eq!(empty.modified_count, 0);
+        assert_eq!(empty.missing_count, 0);
+        assert!(empty.total_size_bytes > 0);
+
+        core.snapshot(&file_config.id, "Initial snapshot").unwrap();
+        core.snapshot(&dir_config.id, "Initial snapshot").unwrap();
+        std::fs::write(&file, "hello again\n").unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let after = core.dashboard_summary().unwrap();
+        assert_eq!(after.file_count, 1); // the directory config is now gone
+        assert_eq!(after.snapshot_count, 2);
+        assert_eq!(after.modified_count, 1); // solo.conf changed since its snapshot
+        assert_eq!(after.missing_count, 1); // nvim directory no longer exists
+    }
+
+    #[test]
     fn edits_file_configuration_in_place() {
         let (core, _data) = make_core();
         let home = tempdir().unwrap();
@@ -538,6 +816,91 @@ mod tests {
 
         let missing = core.read_configuration_file(&config.id, None);
         assert!(matches!(missing, Err(CoreError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn archiving_configuration_hides_it_from_dashboard_but_keeps_history() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let file = home.path().join("archived.conf");
+        std::fs::write(&file, "content\n").unwrap();
+        let config = core.add_custom("Archived", &file.to_string_lossy(), Category::Other, false).unwrap();
+        core.snapshot(&config.id, "Initial snapshot").unwrap();
+
+        core.archive_configuration(&config.id).unwrap();
+        assert!(core.list_configurations().unwrap().is_empty());
+        assert_eq!(core.list_archived_configurations().unwrap().len(), 1);
+        // History and detail still work while archived.
+        assert_eq!(core.list_history(&config.id).unwrap().len(), 1);
+        assert!(core.get_configuration_detail(&config.id).unwrap().is_some());
+
+        core.unarchive_configuration(&config.id).unwrap();
+        assert_eq!(core.list_configurations().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn snapshot_favorite_archive_and_delete_via_core() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let file = home.path().join("starred.conf");
+        std::fs::write(&file, "content\n").unwrap();
+        let config = core.add_custom("Starred", &file.to_string_lossy(), Category::Other, false).unwrap();
+        let snap = core.snapshot(&config.id, "Initial snapshot").unwrap().unwrap();
+
+        core.favorite_snapshot(&snap.id, true).unwrap();
+        let history = core.list_history(&config.id).unwrap();
+        assert!(history[0].favorite);
+
+        core.archive_snapshot(&snap.id, true).unwrap();
+        let history = core.list_history(&config.id).unwrap();
+        assert!(history[0].archived);
+
+        core.delete_snapshot(&snap.id).unwrap();
+        assert!(core.list_history(&config.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn suggestions_exclude_tracked_and_private_keys_and_can_create_missing_files() {
+        let (core, _data) = make_core();
+
+        let suggestions = core.list_catalog_suggestions().unwrap();
+        assert!(!suggestions.is_empty());
+        assert!(
+            suggestions.iter().all(|s| !s.definition_id.starts_with("ssh_key_")),
+            "private key definitions must never be suggested"
+        );
+
+        let gitconfig_suggestion = suggestions.iter().find(|s| s.definition_id == "gitconfig").unwrap();
+        assert_eq!(gitconfig_suggestion.category, Category::Git);
+
+        // Suggested definitions get created on disk when tracked.
+        assert!(suggestions.iter().any(|s| s.definition_id == "ripgrep"));
+        let tracked = core.add_suggestion("ripgrep", false).unwrap();
+        assert!(std::path::Path::new(&tracked.path).exists());
+
+        let still_suggested = core
+            .list_catalog_suggestions()
+            .unwrap()
+            .iter()
+            .any(|s| s.definition_id == "ripgrep");
+        assert!(!still_suggested, "tracked suggestions must disappear from the list");
+    }
+
+    #[test]
+    fn suggestions_never_include_paths_that_already_exist() {
+        let dir = tempdir().unwrap();
+        let core = Core::init_with_home(dir.path(), dir.path()).unwrap();
+        // ~/.gitconfig now exists in the sandboxed home used by this Core.
+        std::fs::write(dir.path().join(".gitconfig"), "[user]\n").unwrap();
+
+        let suggestions = core.list_catalog_suggestions().unwrap();
+        assert!(
+            !suggestions.iter().any(|s| s.definition_id == "gitconfig"),
+            "an existing file should surface via discovery, not suggestions"
+        );
+
+        let discovered = core.scan();
+        assert!(discovered.iter().any(|d| d.definition_id == "gitconfig"));
     }
 
     #[test]

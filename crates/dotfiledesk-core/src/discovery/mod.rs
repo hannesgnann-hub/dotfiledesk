@@ -72,7 +72,10 @@ pub fn scan(registry: &Registry) -> Vec<DiscoveredConfig> {
     scan_with_home(registry, &home)
 }
 
-fn scan_with_home(registry: &Registry, home: &Path) -> Vec<DiscoveredConfig> {
+/// Same as [`scan`] but against an explicit home directory — used by [`crate::Core`]
+/// so every path-resolving operation shares one home (the real one in
+/// production, an injected one in tests).
+pub fn scan_with_home(registry: &Registry, home: &Path) -> Vec<DiscoveredConfig> {
     let current = Platform::current();
     let mut found = Vec::new();
 

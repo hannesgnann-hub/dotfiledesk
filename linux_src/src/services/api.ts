@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  CatalogSuggestion,
   Category,
   Configuration,
   ConfigurationDetail,
   ConfigurationView,
+  DashboardSummary,
   DiffResult,
   DiscoveredConfig,
   FileContent,
@@ -17,6 +19,14 @@ export const api = {
   scanConfigurations: () => invoke<DiscoveredConfig[]>("scan_configurations"),
 
   listConfigurations: () => invoke<ConfigurationView[]>("list_configurations"),
+
+  dashboardSummary: () => invoke<DashboardSummary>("dashboard_summary"),
+
+  listArchivedConfigurations: () => invoke<ConfigurationView[]>("list_archived_configurations"),
+
+  archiveConfiguration: (id: string) => invoke<void>("archive_configuration", { id }),
+
+  unarchiveConfiguration: (id: string) => invoke<void>("unarchive_configuration", { id }),
 
   getConfigurationDetail: (id: string) =>
     invoke<ConfigurationDetail | null>("get_configuration_detail", { id }),
@@ -44,6 +54,19 @@ export const api = {
 
   restoreSnapshot: (id: string, commit: string) =>
     invoke<RestoreResult>("restore_snapshot", { id, commit }),
+
+  favoriteSnapshot: (snapshotId: string, favorite: boolean) =>
+    invoke<void>("favorite_snapshot", { snapshotId, favorite }),
+
+  archiveSnapshot: (snapshotId: string, archived: boolean) =>
+    invoke<void>("archive_snapshot", { snapshotId, archived }),
+
+  deleteSnapshot: (snapshotId: string) => invoke<void>("delete_snapshot", { snapshotId }),
+
+  listSuggestions: () => invoke<CatalogSuggestion[]>("list_suggestions"),
+
+  addSuggestion: (definitionId: string, confirmed: boolean) =>
+    invoke<Configuration>("add_suggestion", { definitionId, confirmed }),
 
   listConfigurationFiles: (id: string) => invoke<string[]>("list_configuration_files", { id }),
 

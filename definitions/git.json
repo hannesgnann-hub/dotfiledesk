@@ -25,5 +25,23 @@
     "paths": ["~/.gitmessage"],
     "platforms": ["macos", "linux", "windows"],
     "sensitivity": "normal"
+  },
+  {
+    "id": "gitattributes_global",
+    "application": "Global Gitattributes",
+    "category": "git",
+    "kind": "file",
+    "paths": ["~/.gitattributes", "~/.config/git/attributes"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "git_credentials",
+    "application": "Git Credential Store",
+    "category": "git",
+    "kind": "file",
+    "paths": ["~/.git-credentials"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "highly_sensitive"
   }
 ]
