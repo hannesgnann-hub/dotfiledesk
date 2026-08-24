@@ -1,0 +1,65 @@
+[
+  {
+    "id": "ghostty",
+    "application": "Ghostty",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/.config/ghostty/config"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "starship",
+    "application": "Starship",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/.config/starship.toml"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "kitty",
+    "application": "Kitty",
+    "category": "terminal",
+    "kind": "directory",
+    "paths": ["~/.config/kitty"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "alacritty",
+    "application": "Alacritty",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/.config/alacritty/alacritty.toml"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "wezterm",
+    "application": "WezTerm",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/.wezterm.lua", "~/.config/wezterm/wezterm.lua"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "tmux",
+    "application": "tmux",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/.tmux.conf"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "windows_terminal",
+    "application": "Windows Terminal",
+    "category": "terminal",
+    "kind": "file",
+    "paths": ["~/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"],
+    "platforms": ["windows"],
+    "sensitivity": "normal"
+  }
+]

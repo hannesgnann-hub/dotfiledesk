@@ -1,0 +1,562 @@
+//! GUI-independent core of DotfileDesk: discovers dotfiles, tracks them in
+//! SQLite, snapshots them into an internal git repository, and restores them
+//! safely. No module in this crate knows anything about Tauri or React —
+//! it can be driven from a CLI, a test, or any GUI shell.
+
+pub mod backup;
+pub mod discovery;
+pub mod history;
+pub mod models;
+pub mod security;
+pub mod tracking;
+
+use models::{Category, ConfigKind, Configuration, Sensitivity, Snapshot, Status};
+use serde::{Serialize, Serializer};
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CoreError {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("database error: {0}")]
+    Db(#[from] rusqlite::Error),
+    #[error("git error: {0}")]
+    Git(#[from] git2::Error),
+    #[error("invalid path: {0}")]
+    InvalidPath(String),
+    #[error("invalid commit reference: {0}")]
+    InvalidCommit(String),
+    #[error("configuration not found: {0}")]
+    NotFound(String),
+    #[error("private keys cannot be tracked automatically")]
+    PrivateKeyBlocked,
+    #[error("this file may contain sensitive data and requires confirmation before tracking")]
+    ConfirmationRequired,
+    #[error("path does not exist: {0}")]
+    PathNotFound(String),
+}
+
+// Tauri commands need command errors to be Serialize so they reach the
+// frontend as plain strings instead of panicking the IPC layer.
+impl Serialize for CoreError {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+/// A discovered-or-tracked configuration together with its live status, as
+/// shown on the dashboard.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigurationView {
+    pub configuration: Configuration,
+    pub status: Status,
+}
+
+/// Everything the config detail page needs.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigurationDetail {
+    pub configuration: Configuration,
+    pub status: Status,
+    pub size_bytes: Option<u64>,
+}
+
+/// The content of a single file within a tracked configuration, as shown by
+/// the integrated editor. `relative_path` is `None` for a [`ConfigKind::File`]
+/// configuration and `Some` (relative to the configuration's root) for a
+/// [`ConfigKind::Directory`] one.
+#[derive(Debug, Clone, Serialize)]
+pub struct FileContent {
+    pub relative_path: Option<String>,
+    pub content: String,
+    pub is_binary: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotOutcome {
+    pub configuration_id: String,
+    pub name: String,
+    pub snapshot: Option<Snapshot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SnapshotAllResult {
+    pub snapshotted: Vec<SnapshotOutcome>,
+    pub unchanged_count: usize,
+}
+
+/// The single entry point the Tauri command layer talks to.
+pub struct Core {
+    store: tracking::Store,
+    repo: history::HistoryRepo,
+    registry: discovery::Registry,
+}
+
+impl Core {
+    /// `app_data_dir` is a per-user, per-app directory (e.g. from
+    /// `~/.local/share/dotfiledesk` or the platform's app-data location).
+    pub fn init(app_data_dir: &Path) -> Result<Self, CoreError> {
+        std::fs::create_dir_all(app_data_dir)?;
+        let store = tracking::Store::open(&app_data_dir.join("dotfiledesk.sqlite"))?;
+        let repo = history::HistoryRepo::open_or_init(&app_data_dir.join("repository"))?;
+        let registry = discovery::Registry::load_builtin();
+        Ok(Core { store, repo, registry })
+    }
+
+    pub fn scan(&self) -> Vec<discovery::DiscoveredConfig> {
+        discovery::scan(&self.registry)
+    }
+
+    pub fn list_configurations(&self) -> Result<Vec<ConfigurationView>, CoreError> {
+        let configs = self.store.list_configurations()?;
+        configs
+            .into_iter()
+            .map(|configuration| {
+                let latest = self.latest_commit(&configuration.id)?;
+                let status = history::compute_status(&self.repo, &configuration, latest.as_deref())?;
+                Ok(ConfigurationView { configuration, status })
+            })
+            .collect()
+    }
+
+    pub fn get_configuration_detail(&self, id: &str) -> Result<Option<ConfigurationDetail>, CoreError> {
+        let Some(configuration) = self.store.get_configuration(id)? else {
+            return Ok(None);
+        };
+        let latest = self.latest_commit(id)?;
+        let status = history::compute_status(&self.repo, &configuration, latest.as_deref())?;
+        let size_bytes = path_size(Path::new(&configuration.path));
+        Ok(Some(ConfigurationDetail { configuration, status, size_bytes }))
+    }
+
+    /// Tracks a discovered catalog entry. `confirmed` must be `true` for
+    /// anything other than [`Sensitivity::Normal`]; private keys are always
+    /// refused regardless of confirmation.
+    pub fn add_discovered(&self, definition_id: &str, confirmed: bool) -> Result<Configuration, CoreError> {
+        let discovered = discovery::scan(&self.registry)
+            .into_iter()
+            .find(|d| d.definition_id == definition_id)
+            .ok_or_else(|| CoreError::NotFound(definition_id.to_string()))?;
+
+        if discovered.is_private_key {
+            return Err(CoreError::PrivateKeyBlocked);
+        }
+        if discovered.sensitivity != Sensitivity::Normal && !confirmed {
+            return Err(CoreError::ConfirmationRequired);
+        }
+
+        self.store.add_configuration(
+            Some(&discovered.definition_id),
+            &discovered.application,
+            &discovered.path,
+            discovered.category,
+            discovered.kind,
+            discovered.sensitivity,
+        )
+    }
+
+    /// Tracks a user-supplied file or directory outside the built-in catalog.
+    pub fn add_custom(
+        &self,
+        name: &str,
+        path: &str,
+        category: Category,
+        confirmed: bool,
+    ) -> Result<Configuration, CoreError> {
+        let expanded = expand_home(path);
+        if !expanded.exists() {
+            return Err(CoreError::PathNotFound(path.to_string()));
+        }
+        if security::is_private_key(&expanded) {
+            return Err(CoreError::PrivateKeyBlocked);
+        }
+        let sensitivity = security::classify_path(&expanded);
+        if sensitivity != Sensitivity::Normal && !confirmed {
+            return Err(CoreError::ConfirmationRequired);
+        }
+        let kind = if expanded.is_dir() { ConfigKind::Directory } else { ConfigKind::File };
+
+        self.store.add_configuration(
+            None,
+            name,
+            &expanded.to_string_lossy(),
+            category,
+            kind,
+            sensitivity,
+        )
+    }
+
+    pub fn remove_configuration(&self, id: &str) -> Result<(), CoreError> {
+        self.store.remove_configuration(id)
+    }
+
+    pub fn snapshot(&self, id: &str, reason: &str) -> Result<Option<Snapshot>, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        match self.repo.snapshot(&configuration, reason)? {
+            Some(commit) => Ok(Some(self.store.record_snapshot(id, &commit, reason)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn snapshot_all(&self) -> Result<SnapshotAllResult, CoreError> {
+        let configs = self.store.list_configurations()?;
+        let mut snapshotted = Vec::new();
+        let mut unchanged_count = 0;
+        for configuration in configs {
+            let snapshot = self.snapshot(&configuration.id, "Manual snapshot")?;
+            if snapshot.is_some() {
+                snapshotted.push(SnapshotOutcome {
+                    configuration_id: configuration.id,
+                    name: configuration.name,
+                    snapshot,
+                });
+            } else {
+                unchanged_count += 1;
+            }
+        }
+        Ok(SnapshotAllResult { snapshotted, unchanged_count })
+    }
+
+    pub fn list_history(&self, id: &str) -> Result<Vec<Snapshot>, CoreError> {
+        self.store.list_snapshots(id)
+    }
+
+    /// Diffs a specific snapshot against the one immediately before it.
+    pub fn diff_snapshot(&self, id: &str, commit: &str) -> Result<history::DiffResult, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        let history = self.store.list_snapshots(id)?;
+        let position = history
+            .iter()
+            .position(|s| s.git_commit == commit)
+            .ok_or_else(|| CoreError::InvalidCommit(commit.to_string()))?;
+        let previous = history.get(position + 1).map(|s| s.git_commit.as_str());
+        self.repo.diff_commits(&configuration, previous, commit)
+    }
+
+    /// Diffs the latest snapshot against what's currently on disk.
+    pub fn diff_working(&self, id: &str) -> Result<history::DiffResult, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        let latest = self
+            .latest_commit(id)?
+            .ok_or_else(|| CoreError::NotFound(format!("no snapshot for {id}")))?;
+        self.repo.diff_against_working(&configuration, &latest)
+    }
+
+    pub fn restore(&self, id: &str, commit: &str) -> Result<backup::RestoreResult, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        backup::restore(&self.repo, &self.store, &configuration, commit)
+    }
+
+    /// Lists the files inside a directory configuration, relative to its
+    /// root, for the integrated editor's file browser. Empty for a
+    /// file-kind configuration (there's nothing to browse).
+    pub fn list_configuration_files(&self, id: &str) -> Result<Vec<String>, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        if configuration.kind != ConfigKind::Directory {
+            return Ok(Vec::new());
+        }
+        let root = Path::new(&configuration.path);
+        if !root.exists() {
+            return Ok(Vec::new());
+        }
+        let mut files = Vec::new();
+        for entry in walkdir::WalkDir::new(root).into_iter().filter_entry(|e| {
+            e.file_name()
+                .to_str()
+                .map(|n| !security::is_ignored_entry(n))
+                .unwrap_or(true)
+        }) {
+            let entry = entry.map_err(|e| CoreError::Io(e.into()))?;
+            if entry.file_type().is_file() {
+                let relative = entry.path().strip_prefix(root).expect("walked under root");
+                files.push(relative.to_string_lossy().to_string());
+            }
+        }
+        files.sort();
+        Ok(files)
+    }
+
+    /// Reads a file for the integrated editor. `relative_path` is required
+    /// for directory configurations and ignored for file configurations.
+    pub fn read_configuration_file(
+        &self,
+        id: &str,
+        relative_path: Option<&str>,
+    ) -> Result<FileContent, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        let target = self.resolve_editor_path(&configuration, relative_path)?;
+        if !target.exists() {
+            return Err(CoreError::PathNotFound(target.to_string_lossy().to_string()));
+        }
+        let bytes = std::fs::read(&target)?;
+        match String::from_utf8(bytes) {
+            Ok(content) => Ok(FileContent {
+                relative_path: relative_path.map(|s| s.to_string()),
+                content,
+                is_binary: false,
+            }),
+            Err(_) => Ok(FileContent {
+                relative_path: relative_path.map(|s| s.to_string()),
+                content: String::new(),
+                is_binary: true,
+            }),
+        }
+    }
+
+    /// Writes a file from the integrated editor straight to its real path.
+    /// This does not create a snapshot — the file's status simply becomes
+    /// `Modified` until the user snapshots it, consistent with the rest of
+    /// DotfileDesk never snapshotting automatically.
+    pub fn write_configuration_file(
+        &self,
+        id: &str,
+        relative_path: Option<&str>,
+        content: &str,
+    ) -> Result<(), CoreError> {
+        let configuration = self.require_configuration(id)?;
+        let target = self.resolve_editor_path(&configuration, relative_path)?;
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&target, content)?;
+        Ok(())
+    }
+
+    fn resolve_editor_path(
+        &self,
+        configuration: &Configuration,
+        relative_path: Option<&str>,
+    ) -> Result<PathBuf, CoreError> {
+        match configuration.kind {
+            ConfigKind::File => Ok(PathBuf::from(&configuration.path)),
+            ConfigKind::Directory => {
+                let relative = relative_path
+                    .ok_or_else(|| CoreError::InvalidPath("a file within the directory must be selected".into()))?;
+                Ok(Path::new(&configuration.path).join(relative))
+            }
+        }
+    }
+
+    fn require_configuration(&self, id: &str) -> Result<Configuration, CoreError> {
+        self.store
+            .get_configuration(id)?
+            .ok_or_else(|| CoreError::NotFound(id.to_string()))
+    }
+
+    fn latest_commit(&self, id: &str) -> Result<Option<String>, CoreError> {
+        Ok(self.store.list_snapshots(id)?.into_iter().next().map(|s| s.git_commit))
+    }
+}
+
+/// Expands a leading `~` in a user-supplied path to the current home
+/// directory. Exposed for the GUI layer to preview custom paths before adding
+/// them (see `preview_custom_path`).
+pub fn expand_home_path(raw: &str) -> PathBuf {
+    expand_home(raw)
+}
+
+fn expand_home(raw: &str) -> PathBuf {
+    let Some(home) = dirs::home_dir() else {
+        return PathBuf::from(raw);
+    };
+    if let Some(rest) = raw.strip_prefix("~/") {
+        home.join(rest)
+    } else if raw == "~" {
+        home
+    } else {
+        PathBuf::from(raw)
+    }
+}
+
+fn path_size(path: &Path) -> Option<u64> {
+    if path.is_file() {
+        return std::fs::metadata(path).ok().map(|m| m.len());
+    }
+    if path.is_dir() {
+        let mut total = 0u64;
+        for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
+            if entry.file_type().is_file() {
+                if let Ok(meta) = entry.metadata() {
+                    total += meta.len();
+                }
+            }
+        }
+        return Some(total);
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn make_core() -> (Core, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let core = Core::init(dir.path()).unwrap();
+        (core, dir)
+    }
+
+    #[test]
+    fn full_lifecycle_add_snapshot_modify_diff_restore() {
+        let (core, data_dir) = make_core();
+        let home = tempdir().unwrap();
+        let file = home.path().join("myrc");
+        std::fs::write(&file, "line one\n").unwrap();
+
+        let config = core
+            .add_custom("My Tool", &file.to_string_lossy(), Category::Other, false)
+            .unwrap();
+        assert_eq!(config.sensitivity, Sensitivity::Normal);
+
+        let snap = core.snapshot(&config.id, "Initial snapshot").unwrap();
+        assert!(snap.is_some());
+
+        let detail = core.get_configuration_detail(&config.id).unwrap().unwrap();
+        assert_eq!(detail.status, Status::Synced);
+
+        std::fs::write(&file, "line one\nline two\n").unwrap();
+        let detail = core.get_configuration_detail(&config.id).unwrap().unwrap();
+        assert_eq!(detail.status, Status::Modified);
+
+        let working_diff = core.diff_working(&config.id).unwrap();
+        assert_eq!(working_diff.files.len(), 1);
+
+        let second = core.snapshot(&config.id, "Added line two").unwrap().unwrap();
+        let snap_diff = core.diff_snapshot(&config.id, &second.git_commit).unwrap();
+        assert_eq!(snap_diff.files.len(), 1);
+
+        let history = core.list_history(&config.id).unwrap();
+        assert_eq!(history.len(), 2);
+        let first_commit = history.last().unwrap().git_commit.clone();
+
+        let restore_result = core.restore(&config.id, &first_commit).unwrap();
+        assert!(restore_result.verified);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "line one\n");
+
+        let history_after = core.list_history(&config.id).unwrap();
+        assert!(history_after.len() >= 3); // + pre-restore backup + restore event
+
+        drop(core);
+        drop(data_dir);
+    }
+
+    #[test]
+    fn private_keys_are_never_tracked() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        std::fs::create_dir_all(home.path().join(".ssh")).unwrap();
+        let key = home.path().join(".ssh/id_rsa");
+        std::fs::write(&key, "-----BEGIN KEY-----").unwrap();
+
+        let result = core.add_custom("SSH Key", &key.to_string_lossy(), Category::Ssh, true);
+        assert!(matches!(result, Err(CoreError::PrivateKeyBlocked)));
+    }
+
+    #[test]
+    fn sensitive_paths_require_confirmation() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let npmrc = home.path().join(".npmrc");
+        std::fs::write(&npmrc, "//registry.npmjs.org/:_authToken=abc123\n").unwrap();
+
+        let unconfirmed = core.add_custom("npm", &npmrc.to_string_lossy(), Category::PackageManagers, false);
+        assert!(matches!(unconfirmed, Err(CoreError::ConfirmationRequired)));
+
+        let confirmed = core
+            .add_custom("npm", &npmrc.to_string_lossy(), Category::PackageManagers, true)
+            .unwrap();
+        assert_eq!(confirmed.sensitivity, Sensitivity::PotentialSecret);
+    }
+
+    #[test]
+    fn snapshot_all_only_records_changed_configs() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let a = home.path().join("a.conf");
+        let b = home.path().join("b.conf");
+        std::fs::write(&a, "a\n").unwrap();
+        std::fs::write(&b, "b\n").unwrap();
+        let ca = core.add_custom("A", &a.to_string_lossy(), Category::Other, false).unwrap();
+        let cb = core.add_custom("B", &b.to_string_lossy(), Category::Other, false).unwrap();
+
+        let first = core.snapshot_all().unwrap();
+        assert_eq!(first.snapshotted.len(), 2);
+        assert_eq!(first.unchanged_count, 0);
+
+        std::fs::write(&a, "a changed\n").unwrap();
+        let second = core.snapshot_all().unwrap();
+        assert_eq!(second.snapshotted.len(), 1);
+        assert_eq!(second.snapshotted[0].configuration_id, ca.id);
+        assert_eq!(second.unchanged_count, 1);
+        let _ = cb;
+    }
+
+    #[test]
+    fn edits_file_configuration_in_place() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let file = home.path().join("editable.conf");
+        std::fs::write(&file, "original\n").unwrap();
+        let config = core.add_custom("Editable", &file.to_string_lossy(), Category::Other, false).unwrap();
+
+        let content = core.read_configuration_file(&config.id, None).unwrap();
+        assert!(!content.is_binary);
+        assert_eq!(content.content, "original\n");
+
+        core.write_configuration_file(&config.id, None, "edited\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "edited\n");
+
+        let detail = core.get_configuration_detail(&config.id).unwrap().unwrap();
+        assert_eq!(detail.status, Status::NotTracked); // no snapshot taken yet
+    }
+
+    #[test]
+    fn edits_file_within_directory_configuration() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let dir = home.path().join("nvim");
+        std::fs::create_dir_all(dir.join("lua")).unwrap();
+        std::fs::write(dir.join("init.lua"), "-- init\n").unwrap();
+        std::fs::write(dir.join("lua/plugins.lua"), "-- plugins\n").unwrap();
+
+        let config = core.add_custom("Neovim", &dir.to_string_lossy(), Category::Editor, false).unwrap();
+
+        let mut files = core.list_configuration_files(&config.id).unwrap();
+        files.sort();
+        assert_eq!(files, vec!["init.lua".to_string(), "lua/plugins.lua".to_string()]);
+
+        let content = core.read_configuration_file(&config.id, Some("lua/plugins.lua")).unwrap();
+        assert_eq!(content.content, "-- plugins\n");
+
+        core
+            .write_configuration_file(&config.id, Some("lua/plugins.lua"), "-- plugins updated\n")
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("lua/plugins.lua")).unwrap(),
+            "-- plugins updated\n"
+        );
+
+        let missing = core.read_configuration_file(&config.id, None);
+        assert!(matches!(missing, Err(CoreError::InvalidPath(_))));
+    }
+
+    #[test]
+    fn missing_file_is_reported_and_restorable() {
+        let (core, _data) = make_core();
+        let home = tempdir().unwrap();
+        let file = home.path().join("gone.conf");
+        std::fs::write(&file, "content\n").unwrap();
+        let config = core.add_custom("Gone", &file.to_string_lossy(), Category::Other, false).unwrap();
+        core.snapshot(&config.id, "Initial snapshot").unwrap();
+
+        std::fs::remove_file(&file).unwrap();
+        let detail = core.get_configuration_detail(&config.id).unwrap().unwrap();
+        assert_eq!(detail.status, Status::Missing);
+
+        let history = core.list_history(&config.id).unwrap();
+        let latest = history.first().unwrap().git_commit.clone();
+        let result = core.restore(&config.id, &latest).unwrap();
+        assert!(result.verified);
+        assert!(file.exists());
+    }
+}

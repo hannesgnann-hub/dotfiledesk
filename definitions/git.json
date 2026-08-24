@@ -1,0 +1,29 @@
+[
+  {
+    "id": "gitconfig",
+    "application": "Git Config",
+    "category": "git",
+    "kind": "file",
+    "paths": ["~/.gitconfig"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "gitignore_global",
+    "application": "Global Gitignore",
+    "category": "git",
+    "kind": "file",
+    "paths": ["~/.gitignore_global", "~/.config/git/ignore"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "gitmessage",
+    "application": "Git Commit Template",
+    "category": "git",
+    "kind": "file",
+    "paths": ["~/.gitmessage"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "ssh_config",
+    "application": "SSH",
+    "category": "ssh",
+    "kind": "file",
+    "paths": ["~/.ssh/config"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "potential_secret"
+  },
+  {
+    "id": "ssh_key_rsa",
+    "application": "SSH Private Key (RSA)",
+    "category": "ssh",
+    "kind": "file",
+    "paths": ["~/.ssh/id_rsa"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "highly_sensitive"
+  },
+  {
+    "id": "ssh_key_ed25519",
+    "application": "SSH Private Key (Ed25519)",
+    "category": "ssh",
+    "kind": "file",
+    "paths": ["~/.ssh/id_ed25519"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "highly_sensitive"
+  },
+  {
+    "id": "npmrc",
+    "application": "npm",
+    "category": "package_managers",
+    "kind": "file",
+    "paths": ["~/.npmrc"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "potential_secret"
+  },
+  {
+    "id": "yarnrc",
+    "application": "Yarn",
+    "category": "package_managers",
+    "kind": "file",
+    "paths": ["~/.yarnrc", "~/.yarnrc.yml"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "potential_secret"
+  },
+  {
+    "id": "cargo_config",
+    "application": "Cargo",
+    "category": "package_managers",
+    "kind": "file",
+    "paths": ["~/.cargo/config.toml"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "pip_conf",
+    "application": "pip",
+    "category": "package_managers",
+    "kind": "file",
+    "paths": ["~/.pip/pip.conf", "~/Library/Application Support/pip/pip.conf"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "brewfile",
+    "application": "Homebrew Bundle",
+    "category": "package_managers",
+    "kind": "file",
+    "paths": ["~/.Brewfile"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "aws_config",
+    "application": "AWS Config",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.aws/config"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "potential_secret"
+  },
+  {
+    "id": "aws_credentials",
+    "application": "AWS Credentials",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.aws/credentials"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "highly_sensitive"
+  },
+  {
+    "id": "docker_config",
+    "application": "Docker",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.docker/config.json"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "potential_secret"
+  },
+  {
+    "id": "bat",
+    "application": "bat",
+    "category": "developer_tools",
+    "kind": "directory",
+    "paths": ["~/.config/bat"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "htop",
+    "application": "htop",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.config/htop/htoprc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "ripgrep",
+    "application": "ripgrep",
+    "category": "developer_tools",
+    "kind": "file",
+    "paths": ["~/.ripgreprc", "~/.config/ripgrep/config"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "gh_cli",
+    "application": "GitHub CLI",
+    "category": "developer_tools",
+    "kind": "directory",
+    "paths": ["~/.config/gh"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "highly_sensitive"
+  },
+  {
+    "id": "editorconfig",
+    "application": "EditorConfig",
+    "category": "other",
+    "kind": "file",
+    "paths": ["~/.editorconfig"],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  }
+]

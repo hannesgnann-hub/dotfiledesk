@@ -1,0 +1,64 @@
+[
+  {
+    "id": "nvim",
+    "application": "Neovim",
+    "category": "editor",
+    "kind": "directory",
+    "paths": ["~/.config/nvim"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "vim",
+    "application": "Vim",
+    "category": "editor",
+    "kind": "file",
+    "paths": ["~/.vimrc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "helix",
+    "application": "Helix",
+    "category": "editor",
+    "kind": "directory",
+    "paths": ["~/.config/helix"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "vscode_settings",
+    "application": "VS Code Settings",
+    "category": "editor",
+    "kind": "file",
+    "paths": [
+      "~/Library/Application Support/Code/User/settings.json",
+      "~/.config/Code/User/settings.json",
+      "~/AppData/Roaming/Code/User/settings.json"
+    ],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "vscode_keybindings",
+    "application": "VS Code Keybindings",
+    "category": "editor",
+    "kind": "file",
+    "paths": [
+      "~/Library/Application Support/Code/User/keybindings.json",
+      "~/.config/Code/User/keybindings.json",
+      "~/AppData/Roaming/Code/User/keybindings.json"
+    ],
+    "platforms": ["macos", "linux", "windows"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "emacs",
+    "application": "Emacs",
+    "category": "editor",
+    "kind": "file",
+    "paths": ["~/.emacs.d/init.el", "~/.emacs"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  }
+]

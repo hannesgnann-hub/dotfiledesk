@@ -1,0 +1,65 @@
+[
+  {
+    "id": "zsh",
+    "application": "Zsh",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/.zshrc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "zsh_profile",
+    "application": "Zsh Profile",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/.zprofile"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "bash",
+    "application": "Bash",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/.bashrc"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "bash_profile",
+    "application": "Bash Profile",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/.bash_profile"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "fish",
+    "application": "Fish",
+    "category": "shell",
+    "kind": "directory",
+    "paths": ["~/.config/fish"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "profile",
+    "application": "Shell Profile",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/.profile"],
+    "platforms": ["macos", "linux"],
+    "sensitivity": "normal"
+  },
+  {
+    "id": "powershell_profile",
+    "application": "PowerShell Profile",
+    "category": "shell",
+    "kind": "file",
+    "paths": ["~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1"],
+    "platforms": ["windows"],
+    "sensitivity": "normal"
+  }
+]
