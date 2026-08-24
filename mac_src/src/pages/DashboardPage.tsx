@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Archive } from "lucide-react";
 import { api, errorMessage } from "../services/api";
 import type { ConfigurationView, DashboardSummary } from "../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../types";
@@ -88,7 +89,8 @@ export default function DashboardPage() {
           <div />
           <div className="page-header-actions">
             {archivedCount > 0 && (
-              <Link className="link-button" to="/archived">
+              <Link className="btn btn-secondary" to="/archived">
+                <Archive size={15} strokeWidth={1.75} />
                 Archived ({archivedCount})
               </Link>
             )}
