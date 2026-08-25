@@ -340,6 +340,69 @@
     ]
   },
   {
+    "definition_id": "alacritty",
+    "suggestions": [
+      {
+        "label": "Comfortable font size and padding",
+        "description": "Sets a slightly larger font size and adds breathing room around the terminal content instead of text running edge-to-edge.",
+        "format": "toml_table",
+        "snippet": "[font]\nsize = 13.0\n\n[window]\npadding = { x = 8, y = 8 }\n"
+      },
+      {
+        "label": "More scrollback history",
+        "description": "Keeps far more scrollback lines than the default, so you can scroll further back through past terminal output.",
+        "format": "toml_table",
+        "snippet": "[scrolling]\nhistory = 10000\n"
+      },
+      {
+        "label": "Blinking block cursor",
+        "description": "Makes the cursor blink and sets it to a solid block shape, so it's easier to spot at a glance.",
+        "format": "toml_table",
+        "snippet": "[cursor]\nstyle = { shape = \"Block\", blinking = \"On\" }\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "starship",
+    "suggestions": [
+      {
+        "label": "Command duration",
+        "description": "Shows how long the previous command took to run whenever it's slower than 2 seconds — handy for spotting slow builds or tests.",
+        "format": "toml_table",
+        "snippet": "[cmd_duration]\nmin_time = 2000\nformat = \"took [$duration]($style) \"\n"
+      },
+      {
+        "label": "Git ahead/behind status",
+        "description": "Shows how many commits your branch is ahead or behind its upstream, right in the prompt.",
+        "format": "toml_table",
+        "snippet": "[git_status]\nahead = \"⇡${count}\"\nbehind = \"⇣${count}\"\n"
+      },
+      {
+        "label": "Shorter directory path",
+        "description": "Keeps the current path short by showing only the last few segments, truncating to the repo root when you're inside a git repo.",
+        "format": "toml_table",
+        "snippet": "[directory]\ntruncation_length = 3\ntruncate_to_repo = true\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "cargo_config",
+    "suggestions": [
+      {
+        "label": "Faster rebuilds with sccache",
+        "description": "Caches compiled crates via sccache so repeated builds — even across different projects — can reuse previous compilation results. Requires sccache to be installed separately.",
+        "format": "toml_table",
+        "snippet": "[build]\nrustc-wrapper = \"sccache\"\n"
+      },
+      {
+        "label": "Fetch dependencies via the system git CLI",
+        "description": "Uses your system's own git command for fetching dependencies instead of Cargo's built-in implementation — helps when a dependency's git remote needs credentials or a proxy your system git is already configured for.",
+        "format": "toml_table",
+        "snippet": "[net]\ngit-fetch-with-cli = true\n"
+      }
+    ]
+  },
+  {
     "definition_id": "vscode_settings",
     "suggestions": [
       {

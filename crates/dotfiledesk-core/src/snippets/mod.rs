@@ -3,7 +3,7 @@
 //! [`crate::CatalogSuggestion`], which suggests entire files/tools to start
 //! tracking — this suggests content to add to one you already have.
 //!
-//! Two insertion strategies, picked per suggestion via [`SnippetFormat`]:
+//! Three insertion strategies, picked per suggestion via [`SnippetFormat`]:
 //! - `text` — blindly appended at the end of the file. Only used for
 //!   line-oriented formats where that can't corrupt anything: shell rc
 //!   files, gitconfig/gitignore, ssh config, npmrc, tmux/vim config,
@@ -13,12 +13,23 @@
 //!   the result is re-serialized. Used for flat JSON-object configs like
 //!   VS Code's `settings.json` or Windows Terminal's `settings.json`, where
 //!   blindly appending text would break the file's syntax outright.
+//! - `toml_table` — the file is parsed with `toml_edit` (which preserves
+//!   comments and formatting elsewhere in the file, unlike a serde
+//!   parse-and-reserialize roundtrip) and any top-level table the
+//!   suggestion defines that doesn't already exist is inserted. Used for
+//!   `alacritty.toml`, `starship.toml`, and Cargo's `config.toml`.
+//!   Suggestions are deliberately restricted to single-segment top-level
+//!   tables (`[font]`, not `[profile.dev]`) — the shallow "does this
+//!   top-level key already exist" check can't see whether a *nested* table
+//!   is present, so anything relying on that would silently no-op once any
+//!   sibling under the same parent existed.
 //!
-//! Structured formats this module can't yet insert into safely (TOML, Lua
-//! tables, JSON arrays like VS Code's `keybindings.json`) simply have no
-//! catalog entries.
+//! Structured formats this module can't yet insert into safely (Lua tables,
+//! JSON arrays like VS Code's `keybindings.json`) simply have no catalog
+//! entries.
 
 use serde::{Deserialize, Serialize};
+use toml_edit::DocumentMut;
 
 const SNIPPETS_JSON: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../definitions/snippets.json"));
@@ -34,6 +45,10 @@ pub enum SnippetFormat {
     /// Parse `snippet` as a JSON object and shallow-merge its keys into the
     /// file's own parsed JSON object, without overwriting existing keys.
     JsonObject,
+    /// Parse `snippet` as TOML and insert any top-level table it defines
+    /// that the file doesn't already have, preserving the rest of the
+    /// file's comments and formatting verbatim.
+    TomlTable,
 }
 
 /// One suggested block of content for a specific kind of file.
@@ -117,6 +132,18 @@ fn already_present(suggestion: &SnippetSuggestion, current_content: &str) -> boo
                 _ => false,
             }
         }
+        SnippetFormat::TomlTable => {
+            let Ok(addition) = suggestion.snippet.parse::<DocumentMut>() else {
+                return false;
+            };
+            let Ok(current) = current_content.parse::<DocumentMut>() else {
+                return false;
+            };
+            let addition_table = addition.as_table();
+            let current_table = current.as_table();
+            let all_present = addition_table.iter().all(|(key, _)| current_table.contains_key(key));
+            all_present
+        }
     }
 }
 
@@ -154,6 +181,27 @@ pub fn apply(suggestion: &SnippetSuggestion, current_content: &str) -> Result<St
             serde_json::to_string_pretty(&base)
                 .map(|s| s + "\n")
                 .map_err(|e| format!("failed to write the merged JSON back out: {e}"))
+        }
+        SnippetFormat::TomlTable => {
+            let mut base = if current_content.trim().is_empty() {
+                DocumentMut::new()
+            } else {
+                current_content
+                    .parse::<DocumentMut>()
+                    .map_err(|e| format!("this file isn't valid TOML, so a suggestion can't be merged in: {e}"))?
+            };
+            let addition = suggestion
+                .snippet
+                .parse::<DocumentMut>()
+                .expect("built-in toml_table snippets must themselves be valid TOML");
+
+            for (key, item) in addition.as_table().iter() {
+                if !base.as_table().contains_key(key) {
+                    base[key] = item.clone();
+                }
+            }
+
+            Ok(base.to_string())
         }
     }
 }
@@ -242,6 +290,52 @@ mod tests {
         let catalog = SnippetCatalog::load_builtin();
         let suggestion = catalog.find("vscode_settings", "Format on save").unwrap();
         let result = apply(suggestion, "{ not valid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn toml_table_snippets_insert_new_tables_and_preserve_comments() {
+        let catalog = SnippetCatalog::load_builtin();
+        let suggestion = catalog.find("alacritty", "More scrollback history").unwrap();
+
+        let existing = "# my alacritty config\n[colors.primary]\nbackground = \"#1d1d1d\"\n";
+        let merged = apply(suggestion, existing).unwrap();
+
+        // The suggestion's table was added...
+        let parsed: toml_edit::DocumentMut = merged.parse().unwrap();
+        assert_eq!(parsed["scrolling"]["history"].as_integer(), Some(10000));
+        // ...and everything already there, including the comment, survives verbatim.
+        assert!(merged.contains("# my alacritty config"));
+        assert_eq!(parsed["colors"]["primary"]["background"].as_str(), Some("#1d1d1d"));
+    }
+
+    #[test]
+    fn toml_table_snippet_does_not_overwrite_an_existing_top_level_table() {
+        let catalog = SnippetCatalog::load_builtin();
+        let suggestion = catalog.find("alacritty", "More scrollback history").unwrap();
+
+        let existing = "[scrolling]\nhistory = 5000\nmultiplier = 5\n";
+        let merged = apply(suggestion, existing).unwrap();
+        let parsed: toml_edit::DocumentMut = merged.parse().unwrap();
+        assert_eq!(parsed["scrolling"]["history"].as_integer(), Some(5000));
+        assert_eq!(parsed["scrolling"]["multiplier"].as_integer(), Some(5));
+    }
+
+    #[test]
+    fn toml_table_suggestion_disappears_once_its_table_exists() {
+        let catalog = SnippetCatalog::load_builtin();
+        let before = catalog.suggestions_for("alacritty", "");
+        assert!(before.iter().any(|s| s.label == "More scrollback history"));
+
+        let after = catalog.suggestions_for("alacritty", "[scrolling]\nhistory = 5000\n");
+        assert!(after.iter().all(|s| s.label != "More scrollback history"));
+    }
+
+    #[test]
+    fn invalid_existing_toml_produces_a_clear_error_instead_of_corrupting_the_file() {
+        let catalog = SnippetCatalog::load_builtin();
+        let suggestion = catalog.find("starship", "Command duration").unwrap();
+        let result = apply(suggestion, "[not valid toml");
         assert!(result.is_err());
     }
 }

@@ -211,8 +211,9 @@ export default function EditorPage() {
                     Suggestions
                   </h2>
                   <p className="section-hint">
-                    Merged into the current buffer — review the change, then Save. JSON files are
-                    reformatted when a suggestion is applied; nothing else is touched until you save.
+                    Merged into the current buffer — review the change, then Save. JSON files get
+                    reformatted when a suggestion is applied; TOML files keep their existing comments
+                    and formatting. Nothing is written to disk until you save.
                   </p>
                   <div className="snippet-list">
                     {snippets.map((suggestion) => (
