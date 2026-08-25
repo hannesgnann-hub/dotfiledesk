@@ -6,6 +6,7 @@ use dotfiledesk_core::backup::RestoreResult;
 use dotfiledesk_core::discovery::DiscoveredConfig;
 use dotfiledesk_core::history::DiffResult;
 use dotfiledesk_core::models::{Category, Configuration, Sensitivity, Snapshot};
+use dotfiledesk_core::snippets::SnippetSuggestion;
 use dotfiledesk_core::{
     CatalogSuggestion, ConfigurationDetail, ConfigurationView, Core, CoreError, DashboardSummary,
     FileContent, SnapshotAllResult,
@@ -187,6 +188,21 @@ fn list_configuration_files(state: tauri::State<AppState>, id: String) -> Result
 }
 
 #[tauri::command]
+fn list_snippet_suggestions(state: tauri::State<AppState>, id: String) -> Result<Vec<SnippetSuggestion>, CoreError> {
+    with_core(state, |core| core.list_snippet_suggestions(&id))
+}
+
+#[tauri::command]
+fn preview_snippet_insertion(
+    state: tauri::State<AppState>,
+    id: String,
+    label: String,
+    current_content: String,
+) -> Result<String, CoreError> {
+    with_core(state, |core| core.preview_snippet_insertion(&id, &label, &current_content))
+}
+
+#[tauri::command]
 fn read_configuration_file(
     state: tauri::State<AppState>,
     id: String,
@@ -244,6 +260,8 @@ fn main() {
             list_suggestions,
             add_suggestion,
             list_configuration_files,
+            list_snippet_suggestions,
+            preview_snippet_insertion,
             read_configuration_file,
             write_configuration_file,
         ])

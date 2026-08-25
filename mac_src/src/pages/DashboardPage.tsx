@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Archive } from "lucide-react";
+import { Archive, Import } from "lucide-react";
 import { api, errorMessage } from "../services/api";
 import type { ConfigurationView, DashboardSummary } from "../types";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../types";
@@ -12,20 +12,34 @@ export default function DashboardPage() {
   const [views, setViews] = useState<ConfigurationView[] | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [archivedCount, setArchivedCount] = useState(0);
+  const [newCount, setNewCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [snapshotting, setSnapshotting] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [list, archived, stats] = await Promise.all([
+      const [list, archived, stats, discovered] = await Promise.all([
         api.listConfigurations(),
         api.listArchivedConfigurations(),
-        api.dashboardSummary()
+        api.dashboardSummary(),
+        api.scanConfigurations()
       ]);
       setViews(list);
       setArchivedCount(archived.length);
       setSummary(stats);
+
+      // Re-scanning here (instead of requiring a manual "rescan" action) is
+      // what makes newly-appeared dotfiles show up without extra clicks —
+      // DotfileDesk still never tracks them until the user picks them on the
+      // Add Configuration page, per the "nothing changes on discovery" rule.
+      const trackedIds = new Set(
+        [...list, ...archived].map((v) => v.configuration.definition_id).filter(Boolean)
+      );
+      const newlyDiscovered = discovered.filter(
+        (d) => !d.is_private_key && !trackedIds.has(d.definition_id)
+      );
+      setNewCount(newlyDiscovered.length);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -88,6 +102,12 @@ export default function DashboardPage() {
         <div className="page-header-top">
           <div />
           <div className="page-header-actions">
+            {newCount > 0 && (
+              <Link className="btn btn-primary" to="/add">
+                <Import size={15} strokeWidth={1.75} />
+                Import ({newCount})
+              </Link>
+            )}
             {archivedCount > 0 && (
               <Link className="btn btn-secondary" to="/archived">
                 <Archive size={15} strokeWidth={1.75} />

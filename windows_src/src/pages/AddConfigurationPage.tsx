@@ -30,9 +30,20 @@ export default function AddConfigurationPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [found, existing, suggested]: [DiscoveredConfig[], ConfigurationView[], CatalogSuggestion[]] =
-          await Promise.all([api.scanConfigurations(), api.listConfigurations(), api.listSuggestions()]);
-        const trackedIds = new Set(existing.map((v) => v.configuration.definition_id).filter(Boolean));
+        const [found, existing, archived, suggested]: [
+          DiscoveredConfig[],
+          ConfigurationView[],
+          ConfigurationView[],
+          CatalogSuggestion[]
+        ] = await Promise.all([
+          api.scanConfigurations(),
+          api.listConfigurations(),
+          api.listArchivedConfigurations(),
+          api.listSuggestions()
+        ]);
+        const trackedIds = new Set(
+          [...existing, ...archived].map((v) => v.configuration.definition_id).filter(Boolean)
+        );
         setDiscovered(found.filter((f) => !trackedIds.has(f.definition_id)));
         setSuggestions(suggested.map((s) => ({ ...s, is_private_key: false })));
       } catch (e) {

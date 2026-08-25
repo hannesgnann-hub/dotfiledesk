@@ -154,3 +154,10 @@ export interface DashboardSummary {
   missing_count: number;
   snapshot_count: number;
 }
+
+/** Suggested content to append to an already-tracked file (see the editor's "Suggestions" panel). */
+export interface SnippetSuggestion {
+  label: string;
+  description: string;
+  snippet: string;
+}

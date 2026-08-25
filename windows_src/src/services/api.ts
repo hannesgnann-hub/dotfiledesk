@@ -12,7 +12,8 @@ import type {
   PathPreview,
   RestoreResult,
   Snapshot,
-  SnapshotAllResult
+  SnapshotAllResult,
+  SnippetSuggestion
 } from "../types";
 
 export const api = {
@@ -69,6 +70,11 @@ export const api = {
     invoke<Configuration>("add_suggestion", { definitionId, confirmed }),
 
   listConfigurationFiles: (id: string) => invoke<string[]>("list_configuration_files", { id }),
+
+  listSnippetSuggestions: (id: string) => invoke<SnippetSuggestion[]>("list_snippet_suggestions", { id }),
+
+  previewSnippetInsertion: (id: string, label: string, currentContent: string) =>
+    invoke<string>("preview_snippet_insertion", { id, label, currentContent }),
 
   readConfigurationFile: (id: string, relativePath?: string) =>
     invoke<FileContent>("read_configuration_file", { id, relativePath: relativePath ?? null }),

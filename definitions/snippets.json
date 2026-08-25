@@ -1,0 +1,426 @@
+[
+  {
+    "definition_id": "zsh",
+    "suggestions": [
+      {
+        "label": "Docker Compose shortcuts",
+        "description": "Short aliases for the Docker Compose commands you type most: bring the stack up in the background, tear it down, and tail its logs.",
+        "snippet": "alias dcu=\"docker compose up -d\"\nalias dcd=\"docker compose down\"\nalias dcl=\"docker compose logs -f\"\n"
+      },
+      {
+        "label": "Navigation shortcuts",
+        "description": "Quick directory listing and \"go up N levels\" aliases so you don't have to type `cd ..` repeatedly.",
+        "snippet": "alias ll=\"ls -lah\"\nalias ..=\"cd ..\"\nalias ...=\"cd ../..\"\n"
+      },
+      {
+        "label": "Homebrew shell environment (Apple Silicon)",
+        "description": "Puts Homebrew's /opt/homebrew binaries on your PATH. Needed on Apple Silicon Macs if brew-installed tools aren't found in new shells.",
+        "snippet": "eval \"$(/opt/homebrew/bin/brew shellenv)\"\n"
+      },
+      {
+        "label": "Shared, deduplicated history",
+        "description": "Makes shell history bigger, shares it live across open terminal tabs, and drops immediate duplicate entries so repeated commands don't clutter it.",
+        "snippet": "HISTSIZE=10000\nSAVEHIST=10000\nsetopt SHARE_HISTORY\nsetopt HIST_IGNORE_DUPS\n"
+      },
+      {
+        "label": "Case-insensitive tab completion",
+        "description": "Lets tab-completion match regardless of case, so `cd doc<TAB>` still finds `Documents`.",
+        "snippet": "zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'\n"
+      },
+      {
+        "label": "Better directory jumping",
+        "description": "Enables zsh's built-in directory stack shortcuts: `cd -3` jumps to the 3rd previously visited directory, and `dirs -v` lists them.",
+        "snippet": "setopt AUTO_PUSHD\nsetopt PUSHD_IGNORE_DUPS\nalias dirs=\"dirs -v\"\n"
+      },
+      {
+        "label": "Correct minor typos in commands",
+        "description": "Asks \"did you mean...\" when a command is almost right (e.g. `sudo mkae` instead of `sudo make`), instead of just failing.",
+        "snippet": "setopt CORRECT\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "zsh_profile",
+    "suggestions": [
+      {
+        "label": "Homebrew shell environment (Apple Silicon)",
+        "description": "Puts Homebrew's /opt/homebrew binaries on your PATH for login shells. Needed on Apple Silicon Macs if brew-installed tools aren't found.",
+        "snippet": "eval \"$(/opt/homebrew/bin/brew shellenv)\"\n"
+      },
+      {
+        "label": "Add ~/bin to PATH",
+        "description": "Makes your personal scripts folder (~/bin) runnable by name from anywhere, without a full path.",
+        "snippet": "export PATH=\"$HOME/bin:$PATH\"\n"
+      },
+      {
+        "label": "Set default editor",
+        "description": "Tells git, crontab, and other CLI tools which editor to open for commit messages and similar prompts.",
+        "snippet": "export EDITOR=\"vim\"\nexport VISUAL=\"$EDITOR\"\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "bash",
+    "suggestions": [
+      {
+        "label": "Docker Compose shortcuts",
+        "description": "Short aliases for the Docker Compose commands you type most: bring the stack up in the background, tear it down, and tail its logs.",
+        "snippet": "alias dcu=\"docker compose up -d\"\nalias dcd=\"docker compose down\"\nalias dcl=\"docker compose logs -f\"\n"
+      },
+      {
+        "label": "Navigation shortcuts",
+        "description": "Quick directory listing and \"go up N levels\" aliases so you don't have to type `cd ..` repeatedly.",
+        "snippet": "alias ll=\"ls -lah\"\nalias ..=\"cd ..\"\nalias ...=\"cd ../..\"\n"
+      },
+      {
+        "label": "Larger, deduplicated history",
+        "description": "Keeps far more history than Bash's small default, avoids storing immediate repeats, and appends to the history file instead of overwriting it when multiple shells are open.",
+        "snippet": "HISTSIZE=10000\nHISTFILESIZE=20000\nHISTCONTROL=ignoredups:erasedups\nshopt -s histappend\n"
+      },
+      {
+        "label": "Case-insensitive tab completion",
+        "description": "Lets tab-completion match regardless of case, so `cd doc<TAB>` still finds `Documents`.",
+        "snippet": "bind \"set completion-ignore-case on\"\n"
+      },
+      {
+        "label": "Check window size after every command",
+        "description": "Fixes wrapped/garbled output after resizing your terminal window by re-reading its size before drawing the next prompt.",
+        "snippet": "shopt -s checkwinsize\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "bash_profile",
+    "suggestions": [
+      {
+        "label": "Source .bashrc from login shells",
+        "description": "macOS Terminal opens login shells, which don't read .bashrc automatically — this line makes sure your aliases and settings from .bashrc still apply.",
+        "snippet": "if [ -f ~/.bashrc ]; then\n  source ~/.bashrc\nfi\n"
+      },
+      {
+        "label": "Add ~/bin to PATH",
+        "description": "Makes your personal scripts folder (~/bin) runnable by name from anywhere, without a full path.",
+        "snippet": "export PATH=\"$HOME/bin:$PATH\"\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "profile",
+    "suggestions": [
+      {
+        "label": "Add ~/bin to PATH",
+        "description": "Makes your personal scripts folder (~/bin) runnable by name from anywhere, without a full path.",
+        "snippet": "export PATH=\"$HOME/bin:$PATH\"\n"
+      },
+      {
+        "label": "Set default editor",
+        "description": "Tells git, crontab, and other CLI tools which editor to open for commit messages and similar prompts.",
+        "snippet": "export EDITOR=\"vim\"\nexport VISUAL=\"$EDITOR\"\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "powershell_profile",
+    "suggestions": [
+      {
+        "label": "Common aliases",
+        "description": "Familiar Unix-style names for everyday PowerShell cmdlets, handy if you switch between shells a lot.",
+        "snippet": "Set-Alias ll Get-ChildItem\nSet-Alias grep Select-String\n"
+      },
+      {
+        "label": "Confirm before overwriting/removing",
+        "description": "Adds a confirmation prompt before Remove-Item deletes something, as a small safety net against typos.",
+        "snippet": "$PSDefaultParameterValues['Remove-Item:Confirm'] = $true\n"
+      },
+      {
+        "label": "Bigger command history",
+        "description": "Keeps a lot more entries in your PSReadLine history so you can recall older commands with the up arrow.",
+        "snippet": "Set-PSReadLineOption -MaximumHistoryCount 10000\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "gitconfig",
+    "suggestions": [
+      {
+        "label": "Useful command aliases",
+        "description": "Shorter names for the git subcommands you run constantly, plus a compact one-line graph log (`git lg`) for seeing branch history at a glance.",
+        "snippet": "[alias]\n\tst = status\n\tco = checkout\n\tbr = branch\n\tlg = log --oneline --graph --decorate --all\n"
+      },
+      {
+        "label": "Colored output and a sane pager",
+        "description": "Turns on colored status/diff/branch output and makes `less` not clear the screen after you quit, so output stays visible in your terminal scrollback.",
+        "snippet": "[color]\n\tui = auto\n[core]\n\tpager = less -FRX\n"
+      },
+      {
+        "label": "Default branch name and pull behavior",
+        "description": "New repos you `git init` start on `main` instead of `master`, and `git pull` merges by default instead of silently choosing rebase-or-merge based on config elsewhere.",
+        "snippet": "[init]\n\tdefaultBranch = main\n[pull]\n\trebase = false\n"
+      },
+      {
+        "label": "Rerere: remember resolved conflicts",
+        "description": "Git remembers how you resolved a merge conflict and automatically reapplies the same resolution if that exact conflict shows up again (common during long rebases).",
+        "snippet": "[rerere]\n\tenabled = true\n"
+      },
+      {
+        "label": "Auto-prune deleted remote branches",
+        "description": "Every `git fetch` also removes local references to branches that were deleted on the remote, so `git branch -a` stops showing stale entries.",
+        "snippet": "[fetch]\n\tprune = true\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "gitignore_global",
+    "suggestions": [
+      {
+        "label": "OS cruft",
+        "description": "The junk files macOS and Windows silently create inside every folder — safe to ignore everywhere, in every repo.",
+        "snippet": ".DS_Store\nThumbs.db\n"
+      },
+      {
+        "label": "Editor cruft",
+        "description": "Local editor/IDE settings and swap files that are specific to your machine and shouldn't be committed to any repo.",
+        "snippet": ".vscode/\n.idea/\n*.swp\n"
+      },
+      {
+        "label": "Environment files",
+        "description": "Keeps your local secrets and environment overrides (API keys, local URLs) out of every repo by default, so you don't have to remember to add them per-project.",
+        "snippet": ".env\n.env.local\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "gitmessage",
+    "suggestions": [
+      {
+        "label": "Conventional Commits reminder",
+        "description": "A comment-only cheat sheet that shows up in every commit editor as a reminder of the type(scope): summary format, without forcing any particular style.",
+        "snippet": "\n# type(scope): short summary\n#\n# feat / fix / docs / refactor / test / chore\n#\n# Why, not just what.\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "ssh_config",
+    "suggestions": [
+      {
+        "label": "Keep connections alive",
+        "description": "Sends a keepalive signal every 60 seconds so SSH sessions don't get silently dropped by NAT routers or firewalls during idle periods.",
+        "snippet": "Host *\n\tServerAliveInterval 60\n\tServerAliveCountMax 30\n"
+      },
+      {
+        "label": "Reuse connections (multiplexing)",
+        "description": "Reuses one already-open SSH connection for subsequent connections to the same host, making repeat `ssh`/`git` operations to the same server near-instant.",
+        "snippet": "Host *\n\tControlMaster auto\n\tControlPath ~/.ssh/sockets/%r@%h-%p\n\tControlPersist 600\n"
+      },
+      {
+        "label": "Prefer identity files over agent forwarding",
+        "description": "Tells SSH to try your specific key files before asking an SSH agent, which can speed up auth when you have many keys loaded.",
+        "snippet": "Host *\n\tIdentitiesOnly yes\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "npmrc",
+    "suggestions": [
+      {
+        "label": "Save exact versions",
+        "description": "New dependencies get pinned to an exact version (e.g. 1.2.3) instead of a caret range (^1.2.3), for more reproducible installs.",
+        "snippet": "save-exact=true\n"
+      },
+      {
+        "label": "Faster installs",
+        "description": "Prefers your local package cache over hitting the network, and skips the funding/audit messages that print on every install.",
+        "snippet": "prefer-offline=true\nfund=false\naudit=false\n"
+      },
+      {
+        "label": "Consistent engine checks",
+        "description": "Fails an install if your Node/npm version doesn't satisfy a package's declared `engines` field, catching version mismatches early instead of hitting a confusing runtime error.",
+        "snippet": "engine-strict=true\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "tmux",
+    "suggestions": [
+      {
+        "label": "Mouse support",
+        "description": "Lets you click to switch panes, drag to resize them, and scroll with the mouse wheel — no keyboard-only navigation required.",
+        "snippet": "set -g mouse on\n"
+      },
+      {
+        "label": "Vi-style copy mode",
+        "description": "Navigate and select text in tmux's copy mode using vi keybindings (h/j/k/l, v to select) instead of emacs-style ones.",
+        "snippet": "setw -g mode-keys vi\n"
+      },
+      {
+        "label": "Reload config with prefix + r",
+        "description": "Lets you apply changes to this file immediately with a keybinding, instead of restarting your whole tmux server.",
+        "snippet": "bind r source-file ~/.tmux.conf \\; display \"Reloaded\"\n"
+      },
+      {
+        "label": "Start windows and panes at 1",
+        "description": "Numbers windows/panes starting at 1 instead of 0, matching where they sit on your keyboard's number row.",
+        "snippet": "set -g base-index 1\nsetw -g pane-base-index 1\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "vim",
+    "suggestions": [
+      {
+        "label": "Sane editing defaults",
+        "description": "Shows line numbers, uses 2-space soft tabs instead of literal tab characters, and turns on syntax highlighting.",
+        "snippet": "set number\nset expandtab\nset shiftwidth=2\nset tabstop=2\nsyntax on\n"
+      },
+      {
+        "label": "Better search",
+        "description": "Search ignores case by default but becomes case-sensitive the moment you type an uppercase letter, and highlights matches as you type.",
+        "snippet": "set ignorecase\nset smartcase\nset incsearch\nset hlsearch\n"
+      },
+      {
+        "label": "Persistent undo",
+        "description": "Keeps your undo history even after closing and reopening a file, so you can undo changes from a previous editing session.",
+        "snippet": "set undofile\nset undodir=~/.vim/undodir\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "editorconfig",
+    "suggestions": [
+      {
+        "label": "Markdown: keep trailing whitespace (line breaks)",
+        "description": "Markdown uses two trailing spaces to mean \"line break\" — this stops editors from stripping them as if they were accidental whitespace.",
+        "snippet": "\n[*.md]\ntrim_trailing_whitespace = false\n"
+      },
+      {
+        "label": "Makefiles require tabs",
+        "description": "Make syntax requires actual tab characters for indentation, not spaces — this section keeps EditorConfig from \"fixing\" that into spaces and breaking the Makefile.",
+        "snippet": "\n[Makefile]\nindent_style = tab\n"
+      },
+      {
+        "label": "YAML: 2-space indentation",
+        "description": "YAML is indentation-sensitive; this pins YAML files to 2-space indents regardless of your other language settings.",
+        "snippet": "\n[*.{yml,yaml}]\nindent_size = 2\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "ripgrep",
+    "suggestions": [
+      {
+        "label": "Smart case and hidden files",
+        "description": "Searches ignore case unless you type an uppercase letter, and also search dotfiles/hidden files that rg skips by default.",
+        "snippet": "--smart-case\n--hidden\n"
+      },
+      {
+        "label": "Always ignore common build/VCS dirs",
+        "description": "Permanently excludes .git and node_modules from every search, even in projects without their own .gitignore rule for it.",
+        "snippet": "--glob=!.git/*\n--glob=!node_modules/*\n"
+      },
+      {
+        "label": "Show 2 lines of context around matches",
+        "description": "Prints a couple of surrounding lines around every match by default, giving you more context without passing -C each time.",
+        "snippet": "--context=2\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "brewfile",
+    "suggestions": [
+      {
+        "label": "Common CLI tools",
+        "description": "A ripgrep + fzf + bat starter set — fast search, fuzzy finding, and a nicer `cat` with syntax highlighting.",
+        "snippet": "brew \"ripgrep\"\nbrew \"fzf\"\nbrew \"bat\"\n"
+      },
+      {
+        "label": "Git tooling",
+        "description": "GitHub's official CLI (`gh`) plus a diff-highlighting pager (`git-delta`) for much more readable `git diff` output.",
+        "snippet": "brew \"gh\"\nbrew \"git-delta\"\n"
+      }
+    ]
+  },
+  {
+    "definition_id": "vscode_settings",
+    "suggestions": [
+      {
+        "label": "Format on save",
+        "description": "Automatically formats your code with the active formatter every time you save a file.",
+        "format": "json_object",
+        "snippet": "{\"editor.formatOnSave\": true}"
+      },
+      {
+        "label": "Trim trailing whitespace and add a final newline",
+        "description": "Cleans up trailing whitespace and makes sure every file ends with a newline on save — what most linters expect anyway.",
+        "format": "json_object",
+        "snippet": "{\"files.trimTrailingWhitespace\": true, \"files.insertFinalNewline\": true}"
+      },
+      {
+        "label": "Hide common noise from the file explorer",
+        "description": "Hides OS cruft and dependency folders from the file explorer sidebar so it stays focused on your actual code.",
+        "format": "json_object",
+        "snippet": "{\"files.exclude\": {\"**/.DS_Store\": true, \"**/node_modules\": true}}"
+      },
+      {
+        "label": "Auto save on focus change",
+        "description": "Saves a file automatically the moment you switch away from its editor tab, so unsaved changes rarely pile up.",
+        "format": "json_object",
+        "snippet": "{\"files.autoSave\": \"onFocusChange\"}"
+      },
+      {
+        "label": "Format on paste too",
+        "description": "Also reformats code you paste in, not just what you type — handy when pasting snippets from elsewhere.",
+        "format": "json_object",
+        "snippet": "{\"editor.formatOnPaste\": true}"
+      },
+      {
+        "label": "Keep the enclosing function/class visible while scrolling",
+        "description": "Pins the current function or class signature to the top of the editor as you scroll through a long file.",
+        "format": "json_object",
+        "snippet": "{\"editor.stickyScroll.enabled\": true}"
+      }
+    ]
+  },
+  {
+    "definition_id": "windows_terminal",
+    "suggestions": [
+      {
+        "label": "Copy on select",
+        "description": "Selecting text in the terminal immediately copies it to your clipboard — no need to press Ctrl+C.",
+        "format": "json_object",
+        "snippet": "{\"copyOnSelect\": true}"
+      },
+      {
+        "label": "Confirm before closing multiple tabs",
+        "description": "Adds a confirmation prompt when closing the window with more than one tab open, so a stray click can't lose a whole session.",
+        "format": "json_object",
+        "snippet": "{\"confirmCloseAllTabs\": true}"
+      },
+      {
+        "label": "Launch on login",
+        "description": "Starts Windows Terminal automatically when you log in.",
+        "format": "json_object",
+        "snippet": "{\"startOnUserLogin\": true}"
+      }
+    ]
+  },
+  {
+    "definition_id": "emacs",
+    "suggestions": [
+      {
+        "label": "Line numbers and no startup screen",
+        "description": "Shows line numbers in every buffer and skips straight past Emacs's splash screen into your last file or scratch buffer.",
+        "snippet": "(global-display-line-numbers-mode t)\n(setq inhibit-startup-screen t)\n"
+      },
+      {
+        "label": "Backups out of the way",
+        "description": "Moves Emacs's automatic backup~ files into a dedicated folder instead of scattering them next to every file you edit.",
+        "snippet": "(setq backup-directory-alist '((\".*\" . \"~/.emacs.d/backups\")))\n"
+      },
+      {
+        "label": "Disable the toolbar and menu bar",
+        "description": "Frees up screen space by hiding the graphical toolbar and menu bar, common on a keyboard-driven Emacs setup.",
+        "snippet": "(tool-bar-mode -1)\n(menu-bar-mode -1)\n"
+      }
+    ]
+  }
+]

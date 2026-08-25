@@ -973,6 +973,64 @@ select {
   color: var(--text-secondary);
 }
 
+.snippet-suggestions {
+  margin-top: 28px;
+}
+
+.snippet-suggestions-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snippet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snippet-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.snippet-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.snippet-row-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.snippet-row-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.snippet-row-preview {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
 /* App shell / footer / sponsor banner (structure mirrors easyalias) */
 
 .app-main {

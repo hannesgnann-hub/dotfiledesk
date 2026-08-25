@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { api, errorMessage } from "../services/api";
-import type { Configuration } from "../types";
+import type { Configuration, SnippetSuggestion } from "../types";
 import PageHeader from "../components/PageHeader";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -22,6 +23,8 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
+  const [snippets, setSnippets] = useState<SnippetSuggestion[]>([]);
+  const [insertingLabel, setInsertingLabel] = useState<string | null>(null);
 
   const dirty = fileLoaded && !isBinary && content !== originalContent;
 
@@ -34,6 +37,8 @@ export default function EditorPage() {
         setConfiguration(detail.configuration);
         if (detail.configuration.kind === "directory") {
           setFiles(await api.listConfigurationFiles(id));
+        } else {
+          setSnippets(await api.listSnippetSuggestions(id));
         }
       } catch (e) {
         setError(errorMessage(e));
@@ -92,6 +97,25 @@ export default function EditorPage() {
       setError(errorMessage(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function insertSnippet(suggestion: SnippetSuggestion) {
+    if (!id || insertingLabel) return;
+    setInsertingLabel(suggestion.label);
+    setError(null);
+    try {
+      // The backend applies the suggestion itself (plain append for
+      // line-based files, a real JSON parse-and-merge for configs like
+      // VS Code's settings.json) so it can never produce invalid syntax.
+      // Nothing is written to disk here — just the in-memory buffer.
+      const merged = await api.previewSnippetInsertion(id, suggestion.label, content);
+      setContent(merged);
+      setSnippets((prev) => prev.filter((s) => s.label !== suggestion.label));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setInsertingLabel(null);
     }
   }
 
@@ -179,6 +203,37 @@ export default function EditorPage() {
                   Save
                 </button>
               </div>
+
+              {snippets.length > 0 && (
+                <section className="snippet-suggestions">
+                  <h2 className="section-heading snippet-suggestions-heading">
+                    <Sparkles size={15} strokeWidth={1.75} />
+                    Suggestions
+                  </h2>
+                  <p className="section-hint">
+                    Merged into the current buffer — review the change, then Save. JSON files are
+                    reformatted when a suggestion is applied; nothing else is touched until you save.
+                  </p>
+                  <div className="snippet-list">
+                    {snippets.map((suggestion) => (
+                      <div className="snippet-row" key={suggestion.label}>
+                        <div className="snippet-row-main">
+                          <div className="snippet-row-label">{suggestion.label}</div>
+                          <p className="snippet-row-description">{suggestion.description}</p>
+                          <pre className="snippet-row-preview">{suggestion.snippet}</pre>
+                        </div>
+                        <button
+                          className="btn btn-secondary"
+                          disabled={insertingLabel !== null}
+                          onClick={() => insertSnippet(suggestion)}
+                        >
+                          {insertingLabel === suggestion.label ? "Inserting…" : "Insert"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
         </>

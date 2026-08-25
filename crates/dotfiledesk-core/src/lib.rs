@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod history;
 pub mod models;
 pub mod security;
+pub mod snippets;
 pub mod tracking;
 
 use models::{Category, ConfigKind, Configuration, Platform, Sensitivity, Snapshot, Status};
@@ -34,6 +35,8 @@ pub enum CoreError {
     ConfirmationRequired,
     #[error("path does not exist: {0}")]
     PathNotFound(String),
+    #[error("couldn't apply this suggestion: {0}")]
+    SnippetApplyFailed(String),
 }
 
 // Tauri commands need command errors to be Serialize so they reach the
@@ -118,6 +121,7 @@ pub struct Core {
     store: tracking::Store,
     repo: history::HistoryRepo,
     registry: discovery::Registry,
+    snippets: snippets::SnippetCatalog,
     home: PathBuf,
 }
 
@@ -137,7 +141,8 @@ impl Core {
         let store = tracking::Store::open(&app_data_dir.join("dotfiledesk.sqlite"))?;
         let repo = history::HistoryRepo::open_or_init(&app_data_dir.join("repository"))?;
         let registry = discovery::Registry::load_builtin();
-        Ok(Core { store, repo, registry, home: home.to_path_buf() })
+        let snippets = snippets::SnippetCatalog::load_builtin();
+        Ok(Core { store, repo, registry, snippets, home: home.to_path_buf() })
     }
 
     /// Expands a leading `~` against this `Core`'s home directory (the real
@@ -536,6 +541,56 @@ impl Core {
         Ok(())
     }
 
+    /// Suggested content to append to a tracked file, based on which catalog
+    /// entry it came from. Empty for directory configurations, custom
+    /// (non-catalog) configurations, and anything whose file doesn't exist —
+    /// there's either no sensible "which file" to append to, or no known
+    /// application to suggest content for.
+    pub fn list_snippet_suggestions(&self, id: &str) -> Result<Vec<snippets::SnippetSuggestion>, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        let Some(definition_id) = &configuration.definition_id else {
+            return Ok(Vec::new());
+        };
+        if configuration.kind != ConfigKind::File {
+            return Ok(Vec::new());
+        }
+        let path = Path::new(&configuration.path);
+        if !path.is_file() {
+            return Ok(Vec::new());
+        }
+        let content = std::fs::read_to_string(path).unwrap_or_default();
+        Ok(self.snippets.suggestions_for(definition_id, &content))
+    }
+
+    /// Computes the new content after applying a suggestion (found by its
+    /// label) from [`Core::list_snippet_suggestions`] on top of
+    /// `current_content`. Takes the caller's in-memory buffer rather than
+    /// re-reading the file itself, so unsaved edits already in the editor
+    /// aren't clobbered by a stale on-disk version. Doesn't write anything —
+    /// the editor puts the result straight into its buffer, so the user
+    /// still reviews and saves it like any other edit.
+    pub fn preview_snippet_insertion(
+        &self,
+        id: &str,
+        label: &str,
+        current_content: &str,
+    ) -> Result<String, CoreError> {
+        let configuration = self.require_configuration(id)?;
+        if configuration.kind != ConfigKind::File {
+            return Err(CoreError::InvalidPath("suggestions only apply to single files".into()));
+        }
+        let definition_id = configuration
+            .definition_id
+            .as_deref()
+            .ok_or_else(|| CoreError::NotFound("this configuration has no known suggestions".into()))?;
+        let suggestion = self
+            .snippets
+            .find(definition_id, label)
+            .ok_or_else(|| CoreError::NotFound(label.to_string()))?;
+
+        snippets::apply(suggestion, current_content).map_err(CoreError::SnippetApplyFailed)
+    }
+
     fn resolve_editor_path(
         &self,
         configuration: &Configuration,
@@ -901,6 +956,81 @@ mod tests {
 
         let discovered = core.scan();
         assert!(discovered.iter().any(|d| d.definition_id == "gitconfig"));
+    }
+
+    #[test]
+    fn snippet_suggestions_are_scoped_to_catalog_files_and_disappear_once_inserted() {
+        // Core's home and app-data dir are the same sandboxed tempdir here,
+        // so writing `.zshrc` into it is what `add_discovered`'s internal
+        // scan will find (mirrors `suggestions_never_include_paths_...`).
+        let (core, data_dir) = make_core();
+
+        // Custom (non-catalog) configuration: no definition_id, so no snippets.
+        let custom_file = data_dir.path().join("custom.conf");
+        std::fs::write(&custom_file, "content\n").unwrap();
+        let custom = core
+            .add_custom("Custom", &custom_file.to_string_lossy(), Category::Other, false)
+            .unwrap();
+        assert!(core.list_snippet_suggestions(&custom.id).unwrap().is_empty());
+
+        // A catalog-linked file (zsh) gets real suggestions.
+        let zshrc = data_dir.path().join(".zshrc");
+        std::fs::write(&zshrc, "export FOO=bar\n").unwrap();
+        let zsh = core.add_discovered("zsh", false).unwrap();
+
+        let suggestions = core.list_snippet_suggestions(&zsh.id).unwrap();
+        assert!(!suggestions.is_empty());
+
+        // Inserting one (simulating the editor's "Insert" button) removes it
+        // from the next call's suggestions.
+        let first = suggestions[0].clone();
+        let appended = format!("export FOO=bar\n{}", first.snippet);
+        std::fs::write(&zshrc, &appended).unwrap();
+        let after = core.list_snippet_suggestions(&zsh.id).unwrap();
+        assert!(after.iter().all(|s| s.label != first.label));
+    }
+
+    #[test]
+    fn previews_a_json_snippet_insertion_without_writing_to_disk() {
+        let (core, data_dir) = make_core();
+        // Matches the macOS candidate path for the "vscode_settings"
+        // definition, so `add_discovered` (which does a real filesystem
+        // scan against Core's sandboxed home) picks it up.
+        let settings = data_dir.path().join("Library/Application Support/Code/User/settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        let original = "{\n  \"editor.tabSize\": 4\n}\n";
+        std::fs::write(&settings, original).unwrap();
+
+        let config = core.add_discovered("vscode_settings", false).unwrap();
+
+        let preview = core
+            .preview_snippet_insertion(&config.id, "Format on save", original)
+            .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&preview).unwrap();
+        assert_eq!(parsed["editor.tabSize"], 4);
+        assert_eq!(parsed["editor.formatOnSave"], true);
+
+        // Preview never writes — the file on disk is exactly as before.
+        assert_eq!(std::fs::read_to_string(&settings).unwrap(), original);
+
+        // Unsaved edits already in the buffer are preserved, not clobbered
+        // by re-reading the (stale) version still on disk.
+        let unsaved = "{\n  \"editor.tabSize\": 4,\n  \"editor.wordWrap\": \"on\"\n}";
+        let preview_over_unsaved = core
+            .preview_snippet_insertion(&config.id, "Format on save", unsaved)
+            .unwrap();
+        let parsed_unsaved: serde_json::Value = serde_json::from_str(&preview_over_unsaved).unwrap();
+        assert_eq!(parsed_unsaved["editor.wordWrap"], "on");
+        assert_eq!(parsed_unsaved["editor.formatOnSave"], true);
+
+        // A custom (non-catalog) configuration has no definition_id to look
+        // suggestions up by, so it's correctly refused instead of guessing.
+        let custom_file = data_dir.path().join("custom.conf");
+        std::fs::write(&custom_file, "content\n").unwrap();
+        let custom = core
+            .add_custom("Custom", &custom_file.to_string_lossy(), Category::Other, false)
+            .unwrap();
+        assert!(core.preview_snippet_insertion(&custom.id, "Format on save", "").is_err());
     }
 
     #[test]
